@@ -5,6 +5,7 @@ abstract final class RouteNames {
   static const String register = '/register';
   static const String dashboard = '/dashboard';
   static const String projects = '/projects';
+  static const String createProject = '/projects/create';
   static const String projectDetails = '/projects/:projectId';
   static const String tasks = '/tasks';
   static const String taskDetails = '/tasks/:taskId';

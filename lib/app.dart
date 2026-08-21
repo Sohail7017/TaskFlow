@@ -24,7 +24,7 @@ class TaskFlowApp extends StatelessWidget {
           routerConfig: AppRouter.router,
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,
-          themeMode: ThemeMode.system,
+          themeMode: ThemeMode.light,
         );
       },
     );

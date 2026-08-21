@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../constants/app_dimensions.dart';
 import 'app_colors.dart';
 import 'app_text_styles.dart';
 
-/// Light theme configuration for TaskFlow
+/// Complete Light Theme configuration for TaskFlow
 ThemeData get lightTheme {
-  final baseTextTheme = GoogleFonts.montserratTextTheme();
+  final baseTextTheme = GoogleFonts.montserratTextTheme(ThemeData.light().textTheme);
 
   return ThemeData(
     useMaterial3: true,
@@ -21,16 +22,23 @@ ThemeData get lightTheme {
       onSecondaryContainer: AppColors.secondaryDark,
       surface: AppColors.surfaceLight,
       onSurface: AppColors.textPrimaryLight,
+      onSurfaceVariant: AppColors.textSecondaryLight,
       error: AppColors.error,
       onError: Colors.white,
       errorContainer: AppColors.errorLight,
-      onErrorContainer: AppColors.error,
+      onErrorContainer: AppColors.errorDark,
       outline: AppColors.borderLight,
       outlineVariant: AppColors.borderSubtleLight,
+      shadow: Colors.black,
     ),
     scaffoldBackgroundColor: AppColors.backgroundLight,
     cardColor: AppColors.cardLight,
     dividerColor: AppColors.borderLight,
+    dividerTheme: const DividerThemeData(
+      color: AppColors.borderLight,
+      thickness: 1,
+      space: 1,
+    ),
     textTheme: baseTextTheme.copyWith(
       displayLarge: AppTextStyles.displayLarge(color: AppColors.textPrimaryLight),
       displayMedium: AppTextStyles.displayMedium(color: AppColors.textPrimaryLight),
@@ -44,7 +52,11 @@ ThemeData get lightTheme {
       bodySmall: AppTextStyles.bodySmall(color: AppColors.textSecondaryLight),
       labelLarge: AppTextStyles.labelLarge(color: AppColors.textPrimaryLight),
       labelMedium: AppTextStyles.labelMedium(color: AppColors.textSecondaryLight),
-      labelSmall: AppTextStyles.labelSmall(color: AppColors.textDisabledLight),
+      labelSmall: AppTextStyles.labelSmall(color: AppColors.textTertiaryLight),
+    ),
+    iconTheme: const IconThemeData(
+      color: AppColors.iconLight,
+      size: AppDimensions.iconMD,
     ),
     appBarTheme: AppBarTheme(
       elevation: 0,
@@ -53,12 +65,13 @@ ThemeData get lightTheme {
       foregroundColor: AppColors.textPrimaryLight,
       surfaceTintColor: Colors.transparent,
       titleTextStyle: AppTextStyles.titleLarge(color: AppColors.textPrimaryLight),
+      iconTheme: const IconThemeData(color: AppColors.iconLight),
     ),
     cardTheme: CardThemeData(
       color: AppColors.cardLight,
       elevation: 0,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppDimensions.borderRadiusLG,
         side: const BorderSide(color: AppColors.borderLight),
       ),
       margin: EdgeInsets.zero,
@@ -68,9 +81,11 @@ ThemeData get lightTheme {
         elevation: 0,
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        textStyle: AppTextStyles.button(),
+        disabledBackgroundColor: AppColors.disabledLight,
+        disabledForegroundColor: AppColors.textDisabledLight,
+        textStyle: AppTextStyles.button(color: Colors.white),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: AppDimensions.borderRadiusMD,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       ),
@@ -79,9 +94,10 @@ ThemeData get lightTheme {
       style: OutlinedButton.styleFrom(
         foregroundColor: AppColors.primary,
         side: const BorderSide(color: AppColors.primary),
-        textStyle: AppTextStyles.button(),
+        disabledForegroundColor: AppColors.textDisabledLight,
+        textStyle: AppTextStyles.button(color: AppColors.primary),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: AppDimensions.borderRadiusMD,
         ),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       ),
@@ -89,46 +105,49 @@ ThemeData get lightTheme {
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
         foregroundColor: AppColors.primary,
-        textStyle: AppTextStyles.button(),
+        textStyle: AppTextStyles.button(color: AppColors.primary),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: AppColors.surfaceLight,
-      hintStyle: AppTextStyles.bodyMedium(color: AppColors.textDisabledLight),
+      fillColor: AppColors.inputBackgroundLight,
+      hintStyle: AppTextStyles.bodyMedium(color: AppColors.textTertiaryLight),
+      labelStyle: AppTextStyles.labelMedium(color: AppColors.textSecondaryLight),
+      prefixIconColor: AppColors.textSecondaryLight,
+      suffixIconColor: AppColors.textSecondaryLight,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppDimensions.borderRadiusMD,
         borderSide: const BorderSide(color: AppColors.borderLight),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: AppDimensions.borderRadiusMD,
         borderSide: const BorderSide(color: AppColors.borderLight),
       ),
-      focusedBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(8)),
-        borderSide: BorderSide(color: AppColors.primary, width: 1.5),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: AppDimensions.borderRadiusMD,
+        borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
       ),
-      errorBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(8)),
-        borderSide: BorderSide(color: AppColors.error),
+      errorBorder: OutlineInputBorder(
+        borderRadius: AppDimensions.borderRadiusMD,
+        borderSide: const BorderSide(color: AppColors.error),
       ),
-      focusedErrorBorder: const OutlineInputBorder(
-        borderRadius: BorderRadius.all(Radius.circular(8)),
-        borderSide: BorderSide(color: AppColors.error, width: 1.5),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: AppDimensions.borderRadiusMD,
+        borderSide: const BorderSide(color: AppColors.error, width: 1.5),
       ),
     ),
     dialogTheme: DialogThemeData(
       backgroundColor: AppColors.surfaceLight,
       elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(borderRadius: AppDimensions.borderRadiusXL),
     ),
-    bottomSheetTheme: const BottomSheetThemeData(
+    bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: AppColors.surfaceLight,
       elevation: 8,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppDimensions.radiusXL)),
       ),
     ),
     navigationBarTheme: NavigationBarThemeData(
@@ -140,6 +159,28 @@ ThemeData get lightTheme {
         }
         return AppTextStyles.labelMedium(color: AppColors.textSecondaryLight);
       }),
+    ),
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: AppColors.textPrimaryLight,
+      contentTextStyle: AppTextStyles.bodyMedium(color: Colors.white),
+      shape: RoundedRectangleBorder(borderRadius: AppDimensions.borderRadiusMD),
+      behavior: SnackBarBehavior.floating,
+    ),
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
+      backgroundColor: AppColors.primary,
+      foregroundColor: Colors.white,
+      elevation: 3,
+      shape: RoundedRectangleBorder(borderRadius: AppDimensions.borderRadiusLG),
+    ),
+    chipTheme: ChipThemeData(
+      backgroundColor: AppColors.backgroundLight,
+      side: const BorderSide(color: AppColors.borderLight),
+      shape: RoundedRectangleBorder(borderRadius: AppDimensions.borderRadiusSM),
+      labelStyle: AppTextStyles.labelSmall(color: AppColors.textPrimaryLight),
+    ),
+    progressIndicatorTheme: const ProgressIndicatorThemeData(
+      color: AppColors.primary,
+      linearTrackColor: AppColors.primaryContainerLight,
     ),
   );
 }

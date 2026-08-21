@@ -1,5 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../presentation/screens/auth/login_screen.dart';
+import '../../presentation/screens/auth/register_screen.dart';
+import '../../presentation/screens/auth/splash_screen.dart';
+import '../../presentation/screens/dashboard/dashboard_screen.dart';
+import '../../presentation/screens/profile/profile_screen.dart';
+import '../../presentation/screens/projects/add_project_screen.dart';
+import '../../presentation/screens/projects/project_details_screen.dart';
+import '../../presentation/screens/projects/projects_screen.dart';
+import '../../presentation/screens/tasks/create_edit_task_screen.dart';
+import '../../presentation/screens/tasks/task_details_screen.dart';
+import '../../presentation/screens/tasks/tasks_screen.dart';
+import '../../presentation/shell/main_shell.dart';
 import 'route_names.dart';
 
 /// Centralized GoRouter routing configuration
@@ -14,93 +26,119 @@ abstract final class AppRouter {
     initialLocation: RouteNames.splash,
     debugLogDiagnostics: false,
     routes: <RouteBase>[
+      // Top-level Auth and Splash routes
       GoRoute(
         path: RouteNames.splash,
         name: 'splash',
-        builder: (context, state) => const _RoutePlaceholderScreen(
-          title: 'TaskFlow',
-          subtitle: 'Splash & Initialization',
-        ),
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const SplashScreen(),
       ),
       GoRoute(
         path: RouteNames.login,
         name: 'login',
-        builder: (context, state) => const _RoutePlaceholderScreen(
-          title: 'Login',
-          subtitle: 'Authentication screen placeholder',
-        ),
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const LoginScreen(),
       ),
       GoRoute(
         path: RouteNames.register,
         name: 'register',
-        builder: (context, state) => const _RoutePlaceholderScreen(
-          title: 'Register',
-          subtitle: 'Registration screen placeholder',
-        ),
+        parentNavigatorKey: rootNavigatorKey,
+        builder: (context, state) => const RegisterScreen(),
       ),
-      GoRoute(
-        path: RouteNames.dashboard,
-        name: 'dashboard',
-        builder: (context, state) => const _RoutePlaceholderScreen(
-          title: 'Dashboard',
-          subtitle: 'Dashboard screen placeholder',
+
+      // Persistent Main Application Shell with 4 Navigation Branches
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) => MainShell(
+          navigationShell: navigationShell,
         ),
-      ),
-      GoRoute(
-        path: RouteNames.projects,
-        name: 'projects',
-        builder: (context, state) => const _RoutePlaceholderScreen(
-          title: 'Projects',
-          subtitle: 'Project list screen placeholder',
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.projectDetails,
-        name: 'projectDetails',
-        builder: (context, state) => _RoutePlaceholderScreen(
-          title: 'Project Details',
-          subtitle: 'Project ID: ${state.pathParameters['projectId']}',
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.tasks,
-        name: 'tasks',
-        builder: (context, state) => const _RoutePlaceholderScreen(
-          title: 'Tasks',
-          subtitle: 'Task list screen placeholder',
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.createTask,
-        name: 'createTask',
-        builder: (context, state) => const _RoutePlaceholderScreen(
-          title: 'Create Task',
-          subtitle: 'Create new task screen placeholder',
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.taskDetails,
-        name: 'taskDetails',
-        builder: (context, state) => _RoutePlaceholderScreen(
-          title: 'Task Details',
-          subtitle: 'Task ID: ${state.pathParameters['taskId']}',
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.editTask,
-        name: 'editTask',
-        builder: (context, state) => _RoutePlaceholderScreen(
-          title: 'Edit Task',
-          subtitle: 'Editing Task ID: ${state.pathParameters['taskId']}',
-        ),
-      ),
-      GoRoute(
-        path: RouteNames.profile,
-        name: 'profile',
-        builder: (context, state) => const _RoutePlaceholderScreen(
-          title: 'Profile',
-          subtitle: 'User Profile & Settings placeholder',
-        ),
+        branches: <StatefulShellBranch>[
+          // Branch 0: Dashboard
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: RouteNames.dashboard,
+                name: 'dashboard',
+                builder: (context, state) => const DashboardScreen(),
+              ),
+            ],
+          ),
+
+          // Branch 1: Projects
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: RouteNames.projects,
+                name: 'projects',
+                builder: (context, state) => const ProjectsScreen(),
+                routes: <RouteBase>[
+                  GoRoute(
+                    path: 'create',
+                    name: 'createProject',
+                    parentNavigatorKey: rootNavigatorKey,
+                    builder: (context, state) => const AddProjectScreen(),
+                  ),
+                  GoRoute(
+                    path: ':projectId',
+                    name: 'projectDetails',
+                    builder: (context, state) => ProjectDetailsScreen(
+                      projectId: state.pathParameters['projectId'] ?? '',
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // Branch 2: Tasks
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: RouteNames.tasks,
+                name: 'tasks',
+                builder: (context, state) => const TasksScreen(),
+                routes: <RouteBase>[
+                  GoRoute(
+                    path: 'create',
+                    name: 'createTask',
+                    parentNavigatorKey: rootNavigatorKey,
+                    builder: (context, state) => const CreateEditTaskScreen(
+                      mode: TaskFormMode.create,
+                    ),
+                  ),
+                  GoRoute(
+                    path: ':taskId',
+                    name: 'taskDetails',
+                    builder: (context, state) => TaskDetailsScreen(
+                      taskId: state.pathParameters['taskId'] ?? '',
+                    ),
+                    routes: <RouteBase>[
+                      GoRoute(
+                        path: 'edit',
+                        name: 'editTask',
+                        parentNavigatorKey: rootNavigatorKey,
+                        builder: (context, state) => CreateEditTaskScreen(
+                          mode: TaskFormMode.edit,
+                          taskId: state.pathParameters['taskId'],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ],
+          ),
+
+          // Branch 3: Profile
+          StatefulShellBranch(
+            routes: <RouteBase>[
+              GoRoute(
+                path: RouteNames.profile,
+                name: 'profile',
+                builder: (context, state) => const ProfileScreen(),
+              ),
+            ],
+          ),
+        ],
       ),
     ],
     errorBuilder: (context, state) => Scaffold(
@@ -110,42 +148,4 @@ abstract final class AppRouter {
       ),
     ),
   );
-}
-
-/// Minimal temporary placeholder screen for compilation and router testing
-class _RoutePlaceholderScreen extends StatelessWidget {
-  const _RoutePlaceholderScreen({
-    required this.title,
-    required this.subtitle,
-  });
-
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(title)),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                title,
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
 }
