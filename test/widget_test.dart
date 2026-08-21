@@ -1,30 +1,28 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
+import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
-
-import 'package:task_flow/main.dart';
+import 'package:task_flow/app.dart';
+import 'package:task_flow/core/di/injection.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  late Directory tempDir;
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+  setUp(() async {
+    TestWidgetsFlutterBinding.ensureInitialized();
+    tempDir = await Directory.systemTemp.createTemp('task_flow_test_');
+    await sl.reset();
+    await initDependencies(hiveStoragePath: tempDir.path);
+  });
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+  tearDown(() async {
+    if (tempDir.existsSync()) {
+      await tempDir.delete(recursive: true);
+    }
+  });
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+  testWidgets('TaskFlowApp builds and displays initial setup screen', (WidgetTester tester) async {
+    await tester.pumpWidget(const TaskFlowApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('TaskFlow'), findsWidgets);
   });
 }
