@@ -16,7 +16,8 @@ class StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final normalized = status.trim().toLowerCase();
 
     final Color foregroundColor;
@@ -66,7 +67,7 @@ class StatusBadge extends StatelessWidget {
               _formatStatus(status),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              style: theme.textTheme.labelSmall?.copyWith(
                 color: foregroundColor,
                 fontSize: 11.sp,
                 fontWeight: FontWeight.w600,

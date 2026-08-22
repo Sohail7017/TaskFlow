@@ -39,8 +39,10 @@ class UserAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bgColor = backgroundColor ?? theme.colorScheme.primaryContainer;
-    final fgColor = textColor ?? theme.colorScheme.primary;
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
+    final bgColor = backgroundColor ?? colorScheme.primaryContainer;
+    final fgColor = textColor ?? colorScheme.primary;
 
     return Container(
       width: size.r,
@@ -50,14 +52,14 @@ class UserAvatar extends StatelessWidget {
         shape: BoxShape.circle,
         border: border ??
             Border.all(
-              color: theme.colorScheme.outline,
+              color: colorScheme.outline,
               width: 1.0,
             ),
       ),
       child: Center(
         child: Text(
           _effectiveInitials,
-          style: theme.textTheme.labelSmall?.copyWith(
+          style: textTheme.labelSmall?.copyWith(
             color: fgColor,
             fontSize: (size * 0.38).sp,
             fontWeight: FontWeight.w700,

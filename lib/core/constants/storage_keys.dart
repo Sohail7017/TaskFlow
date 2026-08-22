@@ -8,8 +8,14 @@ abstract final class StorageKeys {
   // Secure Storage Keys
   static const String accessToken = 'access_token';
   static const String refreshToken = 'refresh_token';
+  static const String accessTokenExpiry = 'access_token_expiry';
+  static const String refreshTokenExpiry = 'refresh_token_expiry';
   static const String currentUserId = 'current_user_id';
   static const String currentOrgId = 'current_org_id';
+  static const String currentUserName = 'current_user_name';
+  static const String currentUserEmail = 'current_user_email';
+  static const String currentUserAvatar = 'current_user_avatar';
+  static const String currentUserRole = 'current_user_role';
   static const String sessionExpiry = 'session_expiry';
 
   // Local Hive Cache Keys

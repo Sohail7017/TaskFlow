@@ -16,7 +16,8 @@ class PriorityBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final normalized = priority.trim().toLowerCase();
 
     final Color foregroundColor;
@@ -68,7 +69,7 @@ class PriorityBadge extends StatelessWidget {
               _formatPriority(priority),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              style: theme.textTheme.labelSmall?.copyWith(
                 color: foregroundColor,
                 fontSize: 11.sp,
                 fontWeight: FontWeight.w600,

@@ -25,7 +25,9 @@ class AppEmptyView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final effectiveIconColor = iconColor ?? theme.colorScheme.onSurfaceVariant;
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
+    final effectiveIconColor = iconColor ?? colorScheme.onSurfaceVariant;
 
     return Center(
       child: Padding(
@@ -41,10 +43,10 @@ class AppEmptyView extends StatelessWidget {
               width: 72.r,
               height: 72.r,
               decoration: BoxDecoration(
-                color: theme.colorScheme.surface,
+                color: colorScheme.surface,
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: theme.colorScheme.outline,
+                  color: colorScheme.outline,
                 ),
               ),
               child: Icon(
@@ -57,7 +59,7 @@ class AppEmptyView extends StatelessWidget {
             Text(
               title,
               textAlign: TextAlign.center,
-              style: theme.textTheme.titleMedium?.copyWith(
+              style: textTheme.titleMedium?.copyWith(
                 fontSize: 16.sp,
                 fontWeight: FontWeight.w600,
               ),
@@ -67,8 +69,8 @@ class AppEmptyView extends StatelessWidget {
               Text(
                 description!,
                 textAlign: TextAlign.center,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
                   fontSize: 14.sp,
                   height: 1.4,
                 ),

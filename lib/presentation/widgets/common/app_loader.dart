@@ -29,7 +29,9 @@ class AppLoader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final loaderColor = color ?? theme.colorScheme.primary;
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
+    final loaderColor = color ?? colorScheme.primary;
 
     final indicator = SizedBox(
       width: (size ?? 24.0).r,
@@ -56,8 +58,8 @@ class AppLoader extends StatelessWidget {
             Text(
               message!,
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+              style: textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
                 fontSize: 14.sp,
               ),
             ),

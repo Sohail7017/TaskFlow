@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_dimensions.dart';
-import '../../../core/routes/route_names.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../bloc/projects/project_bloc.dart';
+import '../../bloc/projects/project_event.dart';
+import '../../bloc/projects/project_state.dart';
 import '../../widgets/common/app_button.dart';
 import '../../widgets/common/app_text_form_field.dart';
 
@@ -20,9 +23,14 @@ enum _ProjectStatusChoice {
   final IconData icon;
 }
 
-/// Premium, production-quality Add Project form screen for TaskFlow
+/// Premium, production-quality Add/Edit Project form screen for TaskFlow
 class AddProjectScreen extends StatefulWidget {
-  const AddProjectScreen({super.key});
+  const AddProjectScreen({
+    super.key,
+    this.projectId,
+  });
+
+  final String? projectId;
 
   @override
   State<AddProjectScreen> createState() => _AddProjectScreenState();
@@ -38,7 +46,8 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
   DateTime? _startDate;
   DateTime? _endDate;
   Color _selectedAccentColor = AppColors.primaryLight;
-  bool _isLoading = false;
+
+  bool get isEdit => widget.projectId != null;
 
   // Available brand accent color options for project identity
   static const List<Color> _accentColors = [
@@ -56,6 +65,20 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
     // Default initial dates
     _startDate = DateTime.now();
     _endDate = DateTime.now().add(const Duration(days: 30));
+    
+    if (isEdit) {
+      final project = context.read<ProjectBloc>().state.projects.where((p) => p.id == widget.projectId).firstOrNull;
+      if (project != null) {
+        _nameController.text = project.name;
+        _descriptionController.text = project.description;
+        _selectedStatus = _ProjectStatusChoice.values.firstWhere(
+          (c) => c.label.toLowerCase() == project.status.toLowerCase(),
+          orElse: () => _ProjectStatusChoice.active,
+        );
+        _startDate = project.createdAt;
+      }
+    }
+
     _nameController.addListener(() {
       setState(() {});
     });
@@ -128,336 +151,355 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
       return;
     }
 
-    setState(() => _isLoading = true);
-
-    // Simulate local UI submission delay
-    await Future.delayed(const Duration(milliseconds: 700));
-
-    if (!mounted) return;
-
-    setState(() => _isLoading = false);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Project "${_nameController.text.trim()}" created successfully!'),
-        backgroundColor: AppColors.success,
-      ),
-    );
-
-    if (context.canPop()) {
-      context.pop();
+    if (isEdit) {
+      final project = context.read<ProjectBloc>().state.projects.firstWhere((p) => p.id == widget.projectId);
+      final updatedProject = project.copyWith(
+        name: _nameController.text.trim(),
+        description: _descriptionController.text.trim(),
+        status: _selectedStatus.label.toLowerCase(),
+      );
+      context.read<ProjectBloc>().add(UpdateProject(updatedProject));
     } else {
-      context.go(RouteNames.projects);
+      context.read<ProjectBloc>().add(
+        CreateProject(
+          name: _nameController.text.trim(),
+          description: _descriptionController.text.trim(),
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(
-            parent: AlwaysScrollableScrollPhysics(),
-          ),
-          padding: EdgeInsets.symmetric(
-            horizontal: AppDimensions.space20.w,
-            vertical: AppDimensions.space16.h,
-          ),
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 680),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // 1. Header with Back Button & Titles
-                    _buildHeader(context),
+    return BlocListener<ProjectBloc, ProjectState>(
+      listenWhen: (previous, current) => 
+        previous.status == ProjectStatus.loading && 
+        (current.status == ProjectStatus.success || current.status == ProjectStatus.error),
+      listener: (context, state) {
+        if (state.status == ProjectStatus.success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Project "${_nameController.text.trim()}" ${isEdit ? 'updated' : 'created'} successfully!'),
+              backgroundColor: AppColors.success,
+            ),
+          );
+          context.pop();
+        } else if (state.status == ProjectStatus.error) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.errorMessage ?? 'An error occurred'),
+              backgroundColor: colorScheme.error,
+            ),
+          );
+        }
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics(),
+            ),
+            padding: EdgeInsets.symmetric(
+              horizontal: AppDimensions.space20.w,
+              vertical: AppDimensions.space16.h,
+            ),
+            child: Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 680),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // 1. Header with Back Button \u0026 Titles
+                      _buildHeader(context),
 
-                    SizedBox(height: AppDimensions.space24.h),
+                      SizedBox(height: AppDimensions.space24.h),
 
-                    // 2. Project Details Section (Name, Identity Badge, Description)
-                    _buildSectionContainer(
-                      context,
-                      title: 'Project details',
-                      subtitle: 'Basic information identifying your project',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Project Name with dynamic Identity Initials Preview
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // Identity Initials Avatar preview
-                              Padding(
-                                padding: EdgeInsets.only(top: 24.h, right: 12.w),
-                                child: AnimatedContainer(
-                                  duration: AppAnimations.fast,
-                                  width: 44.r,
-                                  height: 44.r,
-                                  decoration: BoxDecoration(
-                                    color: _selectedAccentColor.withValues(
-                                      alpha: isDark ? 0.25 : 0.15,
+                      // 2. Project Details Section (Name, Identity Badge, Description)
+                      _buildSectionContainer(
+                        context,
+                        title: 'Project details',
+                        subtitle: 'Basic information identifying your project',
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Project Name with dynamic Identity Initials Preview
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Identity Initials Avatar preview
+                                Padding(
+                                  padding: EdgeInsets.only(top: 24.h, right: 12.w),
+                                  child: AnimatedContainer(
+                                    duration: AppAnimations.fast,
+                                    width: 44.r,
+                                    height: 44.r,
+                                    decoration: BoxDecoration(
+                                      color: _selectedAccentColor.withValues(
+                                        alpha: isDark ? 0.25 : 0.15,
+                                      ),
+                                      borderRadius: BorderRadius.circular(AppDimensions.radiusMD.r),
+                                      border: Border.all(
+                                        color: _selectedAccentColor.withValues(alpha: 0.5),
+                                        width: 1.5,
+                                      ),
                                     ),
-                                    borderRadius: BorderRadius.circular(AppDimensions.radiusMD.r),
-                                    border: Border.all(
-                                      color: _selectedAccentColor.withValues(alpha: 0.5),
-                                      width: 1.5,
-                                    ),
-                                  ),
-                                  alignment: Alignment.center,
-                                  child: Text(
-                                    _computeInitials(_nameController.text),
-                                    style: theme.textTheme.titleMedium?.copyWith(
-                                      color: _selectedAccentColor,
-                                      fontSize: 16.sp,
-                                      fontWeight: FontWeight.w700,
+                                    alignment: Alignment.center,
+                                    child: Text(
+                                      _computeInitials(_nameController.text),
+                                      style: theme.textTheme.titleMedium?.copyWith(
+                                        color: _selectedAccentColor,
+                                        fontSize: 16.sp,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              Expanded(
-                                child: AppTextFormField(
-                                  controller: _nameController,
-                                  label: 'Project name',
-                                  hintText: 'e.g. Website Relaunch',
-                                  textInputAction: TextInputAction.next,
-                                  textCapitalization: TextCapitalization.words,
-                                  validator: (value) {
-                                    if (value == null || value.trim().isEmpty) {
-                                      return 'Project name is required';
-                                    }
-                                    if (value.trim().length < 3) {
-                                      return 'Must be at least 3 characters';
-                                    }
-                                    return null;
-                                  },
+                                Expanded(
+                                  child: AppTextFormField(
+                                    controller: _nameController,
+                                    label: 'Project name',
+                                    hintText: 'e.g. Website Relaunch',
+                                    textInputAction: TextInputAction.next,
+                                    textCapitalization: TextCapitalization.words,
+                                    validator: (value) {
+                                      if (value == null || value.trim().isEmpty) {
+                                        return 'Project name is required';
+                                      }
+                                      if (value.trim().length < 3) {
+                                        return 'Must be at least 3 characters';
+                                      }
+                                      return null;
+                                    },
+                                  ),
                                 ),
-                              ),
-                            ],
-                          ),
-
-                          SizedBox(height: AppDimensions.space16.h),
-
-                          // Accent Color Picker
-                          Text(
-                            'Project identity color',
-                            style: theme.textTheme.labelMedium?.copyWith(
-                              fontSize: 13.sp,
-                              fontWeight: FontWeight.w600,
+                              ],
                             ),
-                          ),
-                          SizedBox(height: AppDimensions.space8.h),
-                          Wrap(
-                            spacing: 10.w,
-                            runSpacing: 8.h,
-                            children: _accentColors.map((color) {
-                              final isSelected = _selectedAccentColor == color;
-                              return GestureDetector(
-                                onTap: () => setState(() => _selectedAccentColor = color),
-                                child: AnimatedContainer(
-                                  duration: AppAnimations.fast,
-                                  width: 32.r,
-                                  height: 32.r,
-                                  decoration: BoxDecoration(
-                                    color: color,
-                                    shape: BoxShape.circle,
-                                    border: isSelected
-                                        ? Border.all(
-                                            color: theme.colorScheme.onSurface,
-                                            width: 2.5,
+
+                            SizedBox(height: AppDimensions.space16.h),
+
+                            // Accent Color Picker
+                            Text(
+                              'Project identity color',
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                fontSize: 13.sp,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            SizedBox(height: AppDimensions.space8.h),
+                            Wrap(
+                              spacing: 10.w,
+                              runSpacing: 8.h,
+                              children: _accentColors.map((color) {
+                                final isSelected = _selectedAccentColor == color;
+                                return GestureDetector(
+                                  onTap: () => setState(() => _selectedAccentColor = color),
+                                  child: AnimatedContainer(
+                                    duration: AppAnimations.fast,
+                                    width: 32.r,
+                                    height: 32.r,
+                                    decoration: BoxDecoration(
+                                      color: color,
+                                      shape: BoxShape.circle,
+                                      border: isSelected
+                                          ? Border.all(
+                                              color: colorScheme.onSurface,
+                                              width: 2.5,
+                                            )
+                                          : null,
+                                      boxShadow: isSelected
+                                          ? [
+                                              BoxShadow(
+                                                color: color.withValues(alpha: 0.4),
+                                                blurRadius: 6.r,
+                                                offset: Offset(0, 2.h),
+                                              ),
+                                            ]
+                                          : null,
+                                    ),
+                                    child: isSelected
+                                        ? Icon(
+                                            Icons.check_rounded,
+                                            size: 18.r,
+                                            color: Colors.white,
                                           )
                                         : null,
-                                    boxShadow: isSelected
-                                        ? [
-                                            BoxShadow(
-                                              color: color.withValues(alpha: 0.4),
-                                              blurRadius: 6.r,
-                                              offset: Offset(0, 2.h),
-                                            ),
-                                          ]
-                                        : null,
                                   ),
-                                  child: isSelected
-                                      ? Icon(
-                                          Icons.check_rounded,
-                                          size: 18.r,
-                                          color: Colors.white,
-                                        )
-                                      : null,
-                                ),
-                              );
-                            }).toList(),
-                          ),
+                                );
+                              }).toList(),
+                            ),
 
-                          SizedBox(height: AppDimensions.space20.h),
+                            SizedBox(height: AppDimensions.space20.h),
 
-                          // Description Multiline field
-                          AppTextFormField(
-                            controller: _descriptionController,
-                            label: 'Description',
-                            hintText: 'Describe what this project is about, objectives, or scope...',
-                            maxLines: 4,
-                            minLines: 3,
-                            textCapitalization: TextCapitalization.sentences,
-                            validator: (value) {
-                              if (value == null || value.trim().isEmpty) {
-                                return 'Please add a short description';
-                              }
-                              return null;
-                            },
-                          ),
-                        ],
+                            // Description Multiline field
+                            AppTextFormField(
+                              controller: _descriptionController,
+                              label: 'Description',
+                              hintText: 'Describe what this project is about, objectives, or scope...',
+                              maxLines: 4,
+                              minLines: 3,
+                              textCapitalization: TextCapitalization.sentences,
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Please add a short description';
+                                }
+                                return null;
+                              },
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
 
-                    SizedBox(height: AppDimensions.space20.h),
+                      SizedBox(height: AppDimensions.space20.h),
 
-                    // 3. Project Status Section
-                    _buildSectionContainer(
-                      context,
-                      title: 'Project status',
-                      subtitle: 'Current lifecycle state of this project',
-                      child: Column(
-                        children: _ProjectStatusChoice.values.map((choice) {
-                          final isSelected = _selectedStatus == choice;
-                          return Padding(
-                            padding: EdgeInsets.only(bottom: 8.h),
-                            child: Material(
-                              color: isSelected
-                                  ? choice.color.withValues(alpha: isDark ? 0.18 : 0.08)
-                                  : theme.colorScheme.surface,
-                              borderRadius: BorderRadius.circular(AppDimensions.radiusMD.r),
-                              child: InkWell(
-                                onTap: () => setState(() => _selectedStatus = choice),
+                      // 3. Project Status Section
+                      _buildSectionContainer(
+                        context,
+                        title: 'Project status',
+                        subtitle: 'Current lifecycle state of this project',
+                        child: Column(
+                          children: _ProjectStatusChoice.values.map((choice) {
+                            final isSelected = _selectedStatus == choice;
+                            return Padding(
+                              padding: EdgeInsets.only(bottom: 8.h),
+                              child: Material(
+                                color: isSelected
+                                    ? choice.color.withValues(alpha: isDark ? 0.18 : 0.08)
+                                    : colorScheme.surface,
                                 borderRadius: BorderRadius.circular(AppDimensions.radiusMD.r),
-                                child: Container(
-                                  padding: EdgeInsets.symmetric(
-                                    horizontal: 14.w,
-                                    vertical: 12.h,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(AppDimensions.radiusMD.r),
-                                    border: Border.all(
-                                      color: isSelected
-                                          ? choice.color.withValues(alpha: 0.6)
-                                          : theme.colorScheme.outline.withValues(
-                                              alpha: isDark ? 0.35 : 0.6,
-                                            ),
-                                      width: isSelected ? 1.4 : 1.0,
+                                child: InkWell(
+                                  onTap: () => setState(() => _selectedStatus = choice),
+                                  borderRadius: BorderRadius.circular(AppDimensions.radiusMD.r),
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 14.w,
+                                      vertical: 12.h,
                                     ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        padding: EdgeInsets.all(6.r),
-                                        decoration: BoxDecoration(
-                                          color: choice.color.withValues(alpha: 0.15),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Icon(
-                                          choice.icon,
-                                          size: 18.r,
-                                          color: choice.color,
-                                        ),
-                                      ),
-                                      SizedBox(width: 12.w),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              choice.label,
-                                              style: theme.textTheme.titleSmall?.copyWith(
-                                                fontSize: 14.sp,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                            Text(
-                                              choice.description,
-                                              style: theme.textTheme.bodySmall?.copyWith(
-                                                color: theme.colorScheme.onSurfaceVariant,
-                                                fontSize: 12.sp,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Icon(
-                                        isSelected
-                                            ? Icons.radio_button_checked_rounded
-                                            : Icons.radio_button_unchecked_rounded,
-                                        size: 20.r,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(AppDimensions.radiusMD.r),
+                                      border: Border.all(
                                         color: isSelected
-                                            ? choice.color
-                                            : theme.colorScheme.outline.withValues(alpha: 0.6),
+                                            ? choice.color.withValues(alpha: 0.6)
+                                            : colorScheme.outline.withValues(
+                                                alpha: isDark ? 0.35 : 0.6,
+                                              ),
+                                        width: isSelected ? 1.4 : 1.0,
                                       ),
-                                    ],
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: EdgeInsets.all(6.r),
+                                          decoration: BoxDecoration(
+                                            color: choice.color.withValues(alpha: 0.15),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: Icon(
+                                            choice.icon,
+                                            size: 18.r,
+                                            color: choice.color,
+                                          ),
+                                        ),
+                                        SizedBox(width: 12.w),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                choice.label,
+                                                style: theme.textTheme.titleSmall?.copyWith(
+                                                  fontSize: 14.sp,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                              Text(
+                                                choice.description,
+                                                style: theme.textTheme.bodySmall?.copyWith(
+                                                  color: colorScheme.onSurfaceVariant,
+                                                  fontSize: 12.sp,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Icon(
+                                          isSelected
+                                              ? Icons.radio_button_checked_rounded
+                                              : Icons.radio_button_unchecked_rounded,
+                                          size: 20.r,
+                                          color: isSelected
+                                              ? choice.color
+                                              : colorScheme.outline.withValues(alpha: 0.6),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          );
-                        }).toList(),
+                            );
+                          }).toList(),
+                        ),
                       ),
-                    ),
 
-                    SizedBox(height: AppDimensions.space20.h),
+                      SizedBox(height: AppDimensions.space20.h),
 
-                    // 4. Timeline Section (Start Date & End Date)
-                    _buildSectionContainer(
-                      context,
-                      title: 'Timeline',
-                      subtitle: 'Estimated start and completion targets',
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final isNarrow = constraints.maxWidth < 420;
+                      // 4. Timeline Section (Start Date \u0026 End Date)
+                      _buildSectionContainer(
+                        context,
+                        title: 'Timeline',
+                        subtitle: 'Estimated start and completion targets',
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final isNarrow = constraints.maxWidth < 420;
 
-                          final startField = _buildDateSelectorField(
-                            context: context,
-                            label: 'Start date',
-                            dateText: _formatDate(_startDate),
-                            onTap: () => _selectDate(context, true),
-                          );
+                            final startField = _buildDateSelectorField(
+                              context: context,
+                              label: 'Start date',
+                              dateText: _formatDate(_startDate),
+                              onTap: () => _selectDate(context, true),
+                            );
 
-                          final endField = _buildDateSelectorField(
-                            context: context,
-                            label: 'End date',
-                            dateText: _formatDate(_endDate),
-                            onTap: () => _selectDate(context, false),
-                          );
+                            final endField = _buildDateSelectorField(
+                              context: context,
+                              label: 'End date',
+                              dateText: _formatDate(_endDate),
+                              onTap: () => _selectDate(context, false),
+                            );
 
-                          if (isNarrow) {
-                            return Column(
+                            if (isNarrow) {
+                              return Column(
+                                children: [
+                                  startField,
+                                  SizedBox(height: 12.h),
+                                  endField,
+                                ],
+                              );
+                            }
+
+                            return Row(
                               children: [
-                                startField,
-                                SizedBox(height: 12.h),
-                                endField,
+                                Expanded(child: startField),
+                                SizedBox(width: 12.w),
+                                Expanded(child: endField),
                               ],
                             );
-                          }
-
-                          return Row(
-                            children: [
-                              Expanded(child: startField),
-                              SizedBox(width: 12.w),
-                              Expanded(child: endField),
-                            ],
-                          );
-                        },
+                          },
+                        ),
                       ),
-                    ),
 
-                    SizedBox(height: AppDimensions.space32.h),
+                      SizedBox(height: AppDimensions.space32.h),
 
-                    // 5. Action Buttons (Cancel & Create Project)
-                    _buildActionButtons(context),
+                      // 5. Action Buttons (Cancel \u0026 Create Project)
+                      _buildActionButtons(context),
 
-                    SizedBox(height: AppDimensions.space24.h),
-                  ],
+                      SizedBox(height: AppDimensions.space24.h),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -480,11 +522,7 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
           icon: const Icon(Icons.arrow_back_rounded),
           tooltip: 'Back',
           onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go(RouteNames.projects);
-            }
+            context.pop();
           },
         ),
         SizedBox(width: 14.w),
@@ -493,7 +531,7 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Create a project',
+                isEdit ? 'Edit project' : 'Create a project',
                 style: theme.textTheme.headlineSmall?.copyWith(
                   fontSize: 22.sp,
                   fontWeight: FontWeight.w700,
@@ -502,7 +540,7 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
               ),
               SizedBox(height: 2.h),
               Text(
-                'Set up a new project and start organizing your work.',
+                isEdit ? 'Update the details of your project.' : 'Set up a new project and start organizing your work.',
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                   fontSize: 12.5.sp,
@@ -635,59 +673,60 @@ class _AddProjectScreenState extends State<AddProjectScreen> {
   }
 
   // ==========================================================================
-  // Action Buttons (Cancel & Create Project)
+  // Action Buttons (Cancel \u0026 Create Project)
   // ==========================================================================
   Widget _buildActionButtons(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 360;
+    return BlocBuilder<ProjectBloc, ProjectState>(
+      builder: (context, state) {
+        final isLoading = state.status == ProjectStatus.loading;
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < 360;
 
-        final cancelButton = AppButton(
-          text: 'Cancel',
-          type: AppButtonType.outlined,
-          isFullWidth: isNarrow,
-          height: 48.h,
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go(RouteNames.projects);
+            final cancelButton = AppButton(
+              text: 'Cancel',
+              type: AppButtonType.outlined,
+              isFullWidth: isNarrow,
+              height: 48.h,
+              onPressed: () {
+                context.pop();
+              },
+            );
+
+            final submitButton = AppButton(
+              text: isEdit ? 'Save Changes' : 'Create Project',
+              icon: isEdit ? Icons.save_rounded : Icons.add_rounded,
+              isFullWidth: isNarrow,
+              height: 48.h,
+              isLoading: isLoading,
+              onPressed: _handleSubmit,
+            );
+
+            if (isNarrow) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  submitButton,
+                  SizedBox(height: 10.h),
+                  cancelButton,
+                ],
+              );
             }
+
+            return Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: cancelButton,
+                ),
+                SizedBox(width: 12.w),
+                Expanded(
+                  flex: 6,
+                  child: submitButton,
+                ),
+              ],
+            );
           },
-        );
-
-        final submitButton = AppButton(
-          text: 'Create Project',
-          icon: Icons.add_rounded,
-          isFullWidth: isNarrow,
-          height: 48.h,
-          isLoading: _isLoading,
-          onPressed: _handleSubmit,
-        );
-
-        if (isNarrow) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              submitButton,
-              SizedBox(height: 10.h),
-              cancelButton,
-            ],
-          );
-        }
-
-        return Row(
-          children: [
-            Expanded(
-              flex: 4,
-              child: cancelButton,
-            ),
-            SizedBox(width: 12.w),
-            Expanded(
-              flex: 6,
-              child: submitButton,
-            ),
-          ],
         );
       },
     );

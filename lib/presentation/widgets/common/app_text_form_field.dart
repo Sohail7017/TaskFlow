@@ -74,6 +74,7 @@ class _AppTextFormFieldState extends State<AppTextFormField> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -82,7 +83,7 @@ class _AppTextFormFieldState extends State<AppTextFormField> {
         if (widget.label != null) ...[
           Text(
             widget.label!,
-            style: theme.textTheme.labelMedium?.copyWith(
+            style: textTheme.labelMedium?.copyWith(
               fontSize: 13.sp,
               fontWeight: FontWeight.w600,
             ),
@@ -108,7 +109,7 @@ class _AppTextFormFieldState extends State<AppTextFormField> {
           onTap: widget.onTap,
           onFieldSubmitted: widget.onFieldSubmitted,
           inputFormatters: widget.inputFormatters,
-          style: theme.textTheme.bodyMedium?.copyWith(
+          style: textTheme.bodyMedium?.copyWith(
             fontSize: 14.sp,
           ),
           decoration: InputDecoration(

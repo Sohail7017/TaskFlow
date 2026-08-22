@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/routes/route_names.dart';
+import '../bloc/auth/auth_bloc.dart';
+import '../bloc/auth/auth_state.dart';
 import '../widgets/common/floating_bottom_nav.dart';
 
 /// Main application shell that hosts the persistent [FloatingBottomNav]
@@ -26,18 +30,25 @@ class MainShell extends StatelessWidget {
     final activeIndex = navigationShell.currentIndex.clamp(0, NavTab.values.length - 1);
     final currentTab = NavTab.values[activeIndex];
 
-    return Scaffold(
-      body: Stack(
-        children: [
-          // Active branch content
-          navigationShell,
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state.status == AuthStatus.empty || state.status == AuthStatus.error) {
+          context.go(RouteNames.login);
+        }
+      },
+      child: Scaffold(
+        body: Stack(
+          children: [
+            // Active branch content
+            navigationShell,
 
-          // Persistent Floating Bottom Navigation Dock
-          FloatingBottomNav(
-            currentTab: currentTab,
-            onTabSelected: _onTabSelected,
-          ),
-        ],
+            // Persistent Floating Bottom Navigation Dock
+            FloatingBottomNav(
+              currentTab: currentTab,
+              onTabSelected: _onTabSelected,
+            ),
+          ],
+        ),
       ),
     );
   }

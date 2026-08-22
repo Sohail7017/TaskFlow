@@ -4,7 +4,7 @@ import 'core/constants/app_constants.dart';
 import 'core/routes/app_router.dart';
 import 'core/theme/app_theme.dart';
 
-/// Root application widget configuring ScreenUtil, GoRouter, and Themes
+/// Root application widget configuring ScreenUtil, Themes, and GoRouter
 class TaskFlowApp extends StatelessWidget {
   const TaskFlowApp({super.key});
 

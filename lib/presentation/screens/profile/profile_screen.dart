@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_dimensions.dart';
 import '../../../core/routes/route_names.dart';
+import '../../../domain/repositories/organization_repository.dart';
+import '../../../core/di/injection.dart';
+import '../../bloc/auth/auth_bloc.dart';
+import '../../bloc/auth/auth_event.dart';
+import '../../bloc/auth/auth_state.dart';
 import '../../widgets/common/app_button.dart';
 import '../../widgets/common/user_avatar.dart';
 
@@ -31,27 +37,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _notificationsEnabled = true;
   bool _emailNotificationsEnabled = true;
 
-  // Static user profile details
-  final String _name = 'Ava Patel';
-  final String _email = 'ava.patel@example.com';
-  final String _role = 'Product Designer';
-  final String _organization = 'Nimbus Digital';
+  String? _orgName;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrgName();
+  }
+
+  Future<void> _loadOrgName() async {
+    final state = context.read<AuthBloc>().state;
+    if (state.orgId != null) {
+      final org = await sl<OrganizationRepository>().getOrganizationById(state.orgId!);
+      if (mounted) {
+        setState(() {
+          _orgName = org?.name;
+        });
+      }
+    }
+  }
 
   void _showThemeSelectorModal(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
     showModalBottomSheet<void>(
       context: context,
       useRootNavigator: true,
       backgroundColor: Colors.transparent,
       builder: (context) => Container(
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
+          color: colorScheme.surface,
           borderRadius: BorderRadius.vertical(
             top: Radius.circular(AppDimensions.radiusXL.r),
           ),
           border: Border(
             top: BorderSide(
-              color: Theme.of(context).colorScheme.outline.withValues(
-                    alpha: Theme.of(context).brightness == Brightness.dark ? 0.35 : 0.6,
+              color: colorScheme.outline.withValues(
+                    alpha: isDark ? 0.35 : 0.6,
                   ),
             ),
           ),
@@ -71,7 +95,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 width: 36.w,
                 height: 4.h,
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.outline.withValues(alpha: 0.4),
+                  color: colorScheme.outline.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(AppDimensions.radiusFull.r),
                 ),
               ),
@@ -79,7 +103,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             SizedBox(height: AppDimensions.space14.h),
             Text(
               'Appearance',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              style: theme.textTheme.titleMedium?.copyWith(
                     fontSize: 16.sp,
                     fontWeight: FontWeight.w700,
                   ),
@@ -104,19 +128,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           mode.icon,
                           size: 18.r,
                           color: isSelected
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                              ? colorScheme.primary
+                              : colorScheme.onSurfaceVariant,
                         ),
                         SizedBox(width: 12.w),
                         Expanded(
                           child: Text(
                             mode.label,
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            style: theme.textTheme.bodyMedium?.copyWith(
                                   fontSize: 14.sp,
                                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                                   color: isSelected
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(context).colorScheme.onSurface,
+                                      ? colorScheme.primary
+                                      : colorScheme.onSurface,
                                 ),
                           ),
                         ),
@@ -126,8 +150,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               : Icons.radio_button_unchecked_rounded,
                           size: 20.r,
                           color: isSelected
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.outline.withValues(alpha: 0.6),
+                              ? colorScheme.primary
+                              : colorScheme.outline.withValues(alpha: 0.6),
                         ),
                       ],
                     ),
@@ -186,6 +210,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             height: 38.h,
             onPressed: () {
               Navigator.of(context).pop();
+              context.read<AuthBloc>().add(const LogoutRequested());
               context.go(RouteNames.login);
             },
           ),
@@ -253,86 +278,105 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isTablet = constraints.maxWidth >= 720;
-          final horizontalPadding = (isTablet ? AppDimensions.space32 : AppDimensions.space20).w;
+    return BlocBuilder<AuthBloc, AuthState>(
+      builder: (context, state) {
+        final name = state.user?.name ?? 'Unknown User';
+        final email = state.user?.email ?? 'No email available';
+        final role = state.role?.name ?? 'No role';
+        final organization = _orgName ?? state.orgId ?? 'Unknown Organization';
+        final avatarUrl = state.user?.avatarUrl;
 
-          return CustomScrollView(
-            cacheExtent: 1500.0,
-            physics: const AlwaysScrollableScrollPhysics(
-              parent: ClampingScrollPhysics(),
-            ),
-            slivers: [
-              // 1. Collapsing Profile Header
-              _buildCollapsingHeader(context, isTablet, horizontalPadding),
+        return Scaffold(
+          body: LayoutBuilder(
+            builder: (context, constraints) {
+              final isTablet = constraints.maxWidth >= 720;
+              final horizontalPadding = (isTablet ? AppDimensions.space32 : AppDimensions.space20).w;
 
-              // 2. Main Content Sections
-              SliverToBoxAdapter(
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 720),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: horizontalPadding,
-                        vertical: AppDimensions.space16.h,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // Personal Information Section
-                          _buildSectionTitle(context, 'Personal information'),
-                          SizedBox(height: AppDimensions.space10.h),
-                          _buildPersonalInfoCard(context),
-                          SizedBox(height: AppDimensions.space24.h),
+              return CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(
+                  parent: ClampingScrollPhysics(),
+                ),
+                slivers: [
+                  // 1. Collapsing Profile Header
+                  _buildCollapsingHeader(context, isTablet, horizontalPadding, name, email, role, avatarUrl),
 
-                          // Preferences Section
-                          _buildSectionTitle(context, 'Preferences'),
-                          SizedBox(height: AppDimensions.space10.h),
-                          _buildPreferencesCard(context),
-                          SizedBox(height: AppDimensions.space24.h),
+                  // 2. Main Content Sections
+                  SliverToBoxAdapter(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 720),
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: horizontalPadding,
+                            vertical: AppDimensions.space16.h,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // Personal Information Section
+                              _buildSectionTitle(context, 'Personal information'),
+                              SizedBox(height: AppDimensions.space10.h),
+                              _buildPersonalInfoCard(context, name, email, role, organization),
+                              SizedBox(height: AppDimensions.space24.h),
 
-                          // Organization Section
-                          _buildSectionTitle(context, 'Organization'),
-                          SizedBox(height: AppDimensions.space10.h),
-                          _buildOrganizationCard(context),
-                          SizedBox(height: AppDimensions.space24.h),
+                              // Preferences Section
+                              _buildSectionTitle(context, 'Preferences'),
+                              SizedBox(height: AppDimensions.space10.h),
+                              _buildPreferencesCard(context),
+                              SizedBox(height: AppDimensions.space24.h),
 
-                          // Account & Security Section
-                          _buildSectionTitle(context, 'Account & Security'),
-                          SizedBox(height: AppDimensions.space10.h),
-                          _buildAccountCard(context),
-                          SizedBox(height: AppDimensions.space24.h),
+                              // Organization Section
+                              _buildSectionTitle(context, 'Organization'),
+                              SizedBox(height: AppDimensions.space10.h),
+                              _buildOrganizationCard(context, organization),
+                              SizedBox(height: AppDimensions.space24.h),
 
-                          // Danger Zone Section
-                          _buildSectionTitle(context, 'Danger zone'),
-                          SizedBox(height: AppDimensions.space10.h),
-                          _buildDangerZoneCard(context),
-                          SizedBox(height: AppDimensions.space16.h),
-                        ],
+                              // Account \u0026 Security Section
+                              _buildSectionTitle(context, 'Account \u0026 Security'),
+                              SizedBox(height: AppDimensions.space10.h),
+                              _buildAccountCard(context),
+                              SizedBox(height: AppDimensions.space24.h),
+
+                              // Danger Zone Section
+                              _buildSectionTitle(context, 'Danger zone'),
+                              SizedBox(height: AppDimensions.space10.h),
+                              _buildDangerZoneCard(context),
+                              SizedBox(height: AppDimensions.space16.h),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
 
-              // 3. Scroll clearance for Floating Bottom Nav
-              SliverPadding(
-                padding: EdgeInsets.only(bottom: 108.h),
-              ),
-            ],
-          );
-        },
-      ),
+                  // 3. Scroll clearance for Floating Bottom Nav
+                  SliverPadding(
+                    padding: EdgeInsets.only(bottom: 108.h),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
   // ==========================================================================
   // 1. Collapsing Profile Header
   // ==========================================================================
-  Widget _buildCollapsingHeader(BuildContext context, bool isTablet, double horizontalPadding) {
+  Widget _buildCollapsingHeader(
+    BuildContext context,
+    bool isTablet,
+    double horizontalPadding,
+    String name,
+    String email,
+    String role,
+    String? avatarUrl,
+  ) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
     final isDark = theme.brightness == Brightness.dark;
 
     final expandedHeight = (isTablet ? 210.0 : 190.0).h.clamp(160.0, 230.0);
@@ -360,7 +404,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  theme.colorScheme.primary.withValues(alpha: isDark ? 0.14 : 0.06),
+                  colorScheme.primary.withValues(alpha: isDark ? 0.14 : 0.06),
                   theme.scaffoldBackgroundColor,
                 ],
               ),
@@ -379,7 +423,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         opacity: ((1.0 - progress * 2.0)).clamp(0.0, 1.0),
                         child: Text(
                           'Profile & Settings',
-                          style: theme.textTheme.titleMedium?.copyWith(
+                          style: textTheme.titleMedium?.copyWith(
                             fontSize: 17.sp,
                             fontWeight: FontWeight.w700,
                           ),
@@ -403,8 +447,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               clipBehavior: Clip.none,
                               children: [
                                 UserAvatar(
-                                  name: _name,
-                                  initials: 'AP',
+                                  name: name,
+                                  imageUrl: avatarUrl,
                                   size: 64.0,
                                 ),
                                 Positioned(
@@ -414,7 +458,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                     width: 22.r,
                                     height: 22.r,
                                     decoration: BoxDecoration(
-                                      color: theme.colorScheme.primary,
+                                      color: colorScheme.primary,
                                       shape: BoxShape.circle,
                                       border: Border.all(
                                         color: theme.scaffoldBackgroundColor,
@@ -440,10 +484,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    _name,
+                                    name,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.headlineSmall?.copyWith(
+                                    style: textTheme.headlineSmall?.copyWith(
                                       fontSize: 18.5.sp,
                                       fontWeight: FontWeight.w700,
                                       letterSpacing: -0.3,
@@ -451,22 +495,22 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   ),
                                   SizedBox(height: 2.h),
                                   Text(
-                                    _role,
+                                    role.toUpperCase(),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.labelMedium?.copyWith(
-                                      color: theme.colorScheme.primary,
+                                    style: textTheme.labelMedium?.copyWith(
+                                      color: colorScheme.primary,
                                       fontSize: 12.5.sp,
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
                                   SizedBox(height: 1.h),
                                   Text(
-                                    _email,
+                                    email,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: theme.colorScheme.onSurfaceVariant,
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: colorScheme.onSurfaceVariant,
                                       fontSize: 11.5.sp,
                                     ),
                                   ),
@@ -500,16 +544,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ==========================================================================
   // Personal Information Card
   // ==========================================================================
-  Widget _buildPersonalInfoCard(BuildContext context) {
+  Widget _buildPersonalInfoCard(
+    BuildContext context,
+    String name,
+    String email,
+    String role,
+    String organization,
+  ) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
     return Container(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(AppDimensions.radiusLG.r),
         border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
+          color: colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
           width: 1.0,
         ),
       ),
@@ -517,13 +568,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildInfoRow(context, label: 'Name', value: _name, icon: Icons.person_outline_rounded),
-          Divider(height: 20.h, color: theme.colorScheme.outline.withValues(alpha: 0.2)),
-          _buildInfoRow(context, label: 'Email', value: _email, icon: Icons.mail_outline_rounded),
-          Divider(height: 20.h, color: theme.colorScheme.outline.withValues(alpha: 0.2)),
-          _buildInfoRow(context, label: 'Role', value: _role, icon: Icons.badge_outlined),
-          Divider(height: 20.h, color: theme.colorScheme.outline.withValues(alpha: 0.2)),
-          _buildInfoRow(context, label: 'Organization', value: _organization, icon: Icons.business_outlined),
+          _buildInfoRow(context, label: 'Name', value: name, icon: Icons.person_outline_rounded),
+          Divider(height: 20.h, color: colorScheme.outline.withValues(alpha: 0.2)),
+          _buildInfoRow(context, label: 'Email', value: email, icon: Icons.mail_outline_rounded),
+          Divider(height: 20.h, color: colorScheme.outline.withValues(alpha: 0.2)),
+          _buildInfoRow(context, label: 'Role', value: role, icon: Icons.badge_outlined),
+          Divider(height: 20.h, color: colorScheme.outline.withValues(alpha: 0.2)),
+          _buildInfoRow(context, label: 'Organization', value: organization, icon: Icons.business_outlined),
           SizedBox(height: AppDimensions.space14.h),
           AppButton(
             text: 'Edit Profile',
@@ -587,14 +638,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ==========================================================================
   Widget _buildPreferencesCard(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
     final isDark = theme.brightness == Brightness.dark;
 
     return Container(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(AppDimensions.radiusLG.r),
         border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
+          color: colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
           width: 1.0,
         ),
       ),
@@ -610,8 +663,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 Text(
                   _selectedTheme.label,
-                  style: theme.textTheme.labelMedium?.copyWith(
-                    color: theme.colorScheme.primary,
+                  style: textTheme.labelMedium?.copyWith(
+                    color: colorScheme.primary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -619,13 +672,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Icon(
                   Icons.chevron_right_rounded,
                   size: 18.r,
-                  color: theme.colorScheme.onSurfaceVariant,
+                  color: colorScheme.onSurfaceVariant,
                 ),
               ],
             ),
             onTap: () => _showThemeSelectorModal(context),
           ),
-          Divider(height: 1, color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+          Divider(height: 1, color: colorScheme.outline.withValues(alpha: 0.2)),
 
           // Notifications Switch Tile
           _SettingsTile(
@@ -637,7 +690,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onChanged: (val) => setState(() => _notificationsEnabled = val),
             ),
           ),
-          Divider(height: 1, color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+          Divider(height: 1, color: colorScheme.outline.withValues(alpha: 0.2)),
 
           // Email Notifications Switch Tile
           _SettingsTile(
@@ -657,17 +710,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ==========================================================================
   // Organization Card
   // ==========================================================================
-  Widget _buildOrganizationCard(BuildContext context) {
+  Widget _buildOrganizationCard(BuildContext context, String organization) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
     final isDark = theme.brightness == Brightness.dark;
 
     return Container(
       padding: EdgeInsets.all(AppDimensions.space16.r),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(AppDimensions.radiusLG.r),
         border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
+          color: colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
           width: 1.0,
         ),
       ),
@@ -678,14 +733,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
             width: 42.r,
             height: 42.r,
             decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withValues(alpha: isDark ? 0.2 : 0.1),
+              color: colorScheme.primary.withValues(alpha: isDark ? 0.2 : 0.1),
               borderRadius: BorderRadius.circular(AppDimensions.radiusMD.r),
             ),
             alignment: Alignment.center,
             child: Text(
-              'ND',
-              style: theme.textTheme.titleSmall?.copyWith(
-                color: theme.colorScheme.primary,
+              organization.substring(0, 2).toUpperCase(),
+              style: textTheme.titleSmall?.copyWith(
+                color: colorScheme.primary,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -696,17 +751,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _organization,
-                  style: theme.textTheme.titleSmall?.copyWith(
+                  organization,
+                  style: textTheme.titleSmall?.copyWith(
                     fontSize: 14.5.sp,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
                 SizedBox(height: 2.h),
                 Text(
-                  '3 active projects • 15 tasks',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
+                  'Active workspace',
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
                     fontSize: 12.sp,
                   ),
                 ),
@@ -716,7 +771,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Icon(
             Icons.chevron_right_rounded,
             size: 20.r,
-            color: theme.colorScheme.onSurfaceVariant,
+            color: colorScheme.onSurfaceVariant,
           ),
         ],
       ),
@@ -728,14 +783,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ==========================================================================
   Widget _buildAccountCard(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
     return Container(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(AppDimensions.radiusLG.r),
         border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
+          color: colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
           width: 1.0,
         ),
       ),
@@ -748,7 +804,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             trailing: Icon(
               Icons.chevron_right_rounded,
               size: 18.r,
-              color: theme.colorScheme.onSurfaceVariant,
+              color: colorScheme.onSurfaceVariant,
             ),
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -756,7 +812,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               );
             },
           ),
-          Divider(height: 1, color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+          Divider(height: 1, color: colorScheme.outline.withValues(alpha: 0.2)),
           _SettingsTile(
             icon: Icons.privacy_tip_outlined,
             title: 'Privacy',
@@ -764,7 +820,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             trailing: Icon(
               Icons.chevron_right_rounded,
               size: 18.r,
-              color: theme.colorScheme.onSurfaceVariant,
+              color: colorScheme.onSurfaceVariant,
             ),
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -772,7 +828,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               );
             },
           ),
-          Divider(height: 1, color: theme.colorScheme.outline.withValues(alpha: 0.2)),
+          Divider(height: 1, color: colorScheme.outline.withValues(alpha: 0.2)),
           _SettingsTile(
             icon: Icons.help_outline_rounded,
             title: 'Help & Support',
@@ -780,7 +836,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             trailing: Icon(
               Icons.chevron_right_rounded,
               size: 18.r,
-              color: theme.colorScheme.onSurfaceVariant,
+              color: colorScheme.onSurfaceVariant,
             ),
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
@@ -798,14 +854,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ==========================================================================
   Widget _buildDangerZoneCard(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
     return Container(
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(AppDimensions.radiusLG.r),
         border: Border.all(
-          color: theme.colorScheme.error.withValues(alpha: isDark ? 0.35 : 0.4),
+          color: colorScheme.error.withValues(alpha: isDark ? 0.35 : 0.4),
           width: 1.0,
         ),
       ),
@@ -814,28 +871,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
           // Log Out Tile
           _SettingsTile(
             icon: Icons.logout_rounded,
-            iconColor: theme.colorScheme.error,
+            iconColor: colorScheme.error,
             title: 'Log out',
             subtitle: 'Sign out of your TaskFlow session',
             trailing: Icon(
               Icons.chevron_right_rounded,
               size: 18.r,
-              color: theme.colorScheme.error,
+              color: colorScheme.error,
             ),
             onTap: () => _showLogoutDialog(context),
           ),
-          Divider(height: 1, color: theme.colorScheme.error.withValues(alpha: 0.2)),
+          Divider(height: 1, color: colorScheme.error.withValues(alpha: 0.2)),
 
           // Delete Account Tile
           _SettingsTile(
             icon: Icons.delete_forever_outlined,
-            iconColor: theme.colorScheme.error,
+            iconColor: colorScheme.error,
             title: 'Delete account',
             subtitle: 'Permanently remove your account and data',
             trailing: Icon(
               Icons.chevron_right_rounded,
               size: 18.r,
-              color: theme.colorScheme.error,
+              color: colorScheme.error,
             ),
             onTap: () => _showDeleteAccountDialog(context),
           ),

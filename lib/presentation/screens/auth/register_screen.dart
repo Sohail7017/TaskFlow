@@ -70,6 +70,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
 
     return Scaffold(
       body: SafeArea(
@@ -99,7 +101,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           SizedBox(height: AppDimensions.space16.h),
                           Text(
                             'Create an account',
-                            style: theme.textTheme.headlineMedium?.copyWith(
+                            style: textTheme.headlineMedium?.copyWith(
                               fontSize: 22.sp,
                               fontWeight: FontWeight.w700,
                               letterSpacing: -0.3,
@@ -109,8 +111,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           Text(
                             'Start organizing and tracking your tasks today',
                             textAlign: TextAlign.center,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: theme.colorScheme.onSurfaceVariant,
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
                               fontSize: 13.sp,
                             ),
                           ),
@@ -124,14 +126,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     Container(
                       padding: EdgeInsets.all(AppDimensions.space20.r),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.surface,
+                        color: colorScheme.surface,
                         borderRadius: BorderRadius.circular(AppDimensions.radiusLG.r),
                         border: Border.all(
-                          color: theme.colorScheme.outline,
+                          color: colorScheme.outline,
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: theme.colorScheme.shadow.withValues(alpha: 0.04),
+                            color: colorScheme.shadow.withValues(alpha: 0.04),
                             blurRadius: 16.r,
                             offset: Offset(0, 4.h),
                           ),
@@ -262,8 +264,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       children: [
                         Text(
                           'Already have an account? ',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
                             fontSize: 13.sp,
                           ),
                         ),
@@ -273,8 +275,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                             padding: EdgeInsets.symmetric(vertical: 4.h),
                             child: Text(
                               'Sign in',
-                              style: theme.textTheme.labelMedium?.copyWith(
-                                color: theme.colorScheme.primary,
+                              style: textTheme.labelMedium?.copyWith(
+                                color: colorScheme.primary,
                                 fontSize: 13.sp,
                                 fontWeight: FontWeight.w700,
                               ),

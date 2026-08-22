@@ -1,44 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_dimensions.dart';
 import '../../../core/routes/route_names.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../domain/entities/project.dart';
+import '../../bloc/projects/project_bloc.dart';
+import '../../bloc/projects/project_event.dart';
+import '../../bloc/projects/project_state.dart';
 import '../../widgets/common/app_empty_view.dart';
 import '../../widgets/common/app_error_view.dart';
 import '../../widgets/common/status_badge.dart';
 
-/// Supported sort options for the Projects List UI preview
+/// Supported sort options for the Projects List UI
 enum ProjectSortOption {
   recent('Recently Updated', Icons.update_rounded),
-  progress('Progress', Icons.trending_up_rounded),
   name('Project Name', Icons.sort_by_alpha_rounded),
   tasks('Task Count', Icons.checklist_rounded);
 
   const ProjectSortOption(this.label, this.icon);
   final String label;
   final IconData icon;
-}
-
-/// A sample presentation data model for the Projects List UI
-class _ProjectItemData {
-  const _ProjectItemData({
-    required this.id,
-    required this.initials,
-    required this.name,
-    required this.description,
-    required this.taskCount,
-    required this.status,
-    required this.progress,
-  });
-
-  final String id;
-  final String initials;
-  final String name;
-  final String description;
-  final String taskCount;
-  final String status;
-  final double progress;
 }
 
 /// Premium, production-quality Projects Screen for TaskFlow
@@ -58,44 +41,10 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   String _selectedStatusFilter = 'All';
   ProjectSortOption _selectedSort = ProjectSortOption.recent;
 
-  // Interactive demo states
-  bool _isLoading = false;
-  bool _isError = false;
-
-  // Static sample projects
-  static const List<_ProjectItemData> _allProjects = [
-    _ProjectItemData(
-      id: 'proj-1',
-      initials: 'WR',
-      name: 'Website Relaunch',
-      description: 'Redesign and rebuild the marketing website on the new design system.',
-      taskCount: '6 Tasks',
-      status: 'Active',
-      progress: 0.80,
-    ),
-    _ProjectItemData(
-      id: 'proj-2',
-      initials: 'MA',
-      name: 'Mobile App v2',
-      description: 'Second major release of the customer-facing mobile app.',
-      taskCount: '5 Tasks',
-      status: 'Active',
-      progress: 0.60,
-    ),
-    _ProjectItemData(
-      id: 'proj-3',
-      initials: 'CR',
-      name: 'Client Onboarding Revamp',
-      description: 'Improve the onboarding experience and simplify the client setup flow.',
-      taskCount: '4 Tasks',
-      status: 'Review',
-      progress: 0.40,
-    ),
-  ];
-
   @override
   void initState() {
     super.initState();
+    context.read<ProjectBloc>().add(const LoadProjects());
     _searchController.addListener(() {
       final hasText = _searchController.text.trim().isNotEmpty;
       if (hasText != _hasSearchText) {
@@ -117,9 +66,42 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     });
   }
 
+  List<Project> _filterAndSort(List<Project> projects) {
+    var filtered = List<Project>.from(projects);
+    
+    // Search filter
+    if (_hasSearchText) {
+      final query = _searchController.text.toLowerCase();
+      filtered = filtered.where((p) => 
+        p.name.toLowerCase().contains(query) || 
+        p.description.toLowerCase().contains(query)
+      ).toList();
+    }
+
+    // Status filter
+    if (_selectedStatusFilter != 'All') {
+      filtered = filtered.where((p) => 
+        p.status.toLowerCase() == _selectedStatusFilter.toLowerCase()
+      ).toList();
+    }
+
+    // Sort
+    switch (_selectedSort) {
+      case ProjectSortOption.recent:
+        filtered.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      case ProjectSortOption.name:
+        filtered.sort((a, b) => a.name.compareTo(b.name));
+      case ProjectSortOption.tasks:
+        filtered.sort((a, b) => b.taskCount.compareTo(a.taskCount));
+    }
+
+    return filtered;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
     return Scaffold(
       body: LayoutBuilder(
@@ -127,135 +109,146 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
           final isTablet = constraints.maxWidth >= 720;
           final horizontalPadding = (isTablet ? AppDimensions.space32 : AppDimensions.space20).w;
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              setState(() => _isLoading = true);
-              await Future.delayed(const Duration(milliseconds: 800));
-              if (mounted) setState(() => _isLoading = false);
-            },
-            color: theme.colorScheme.primary,
-            edgeOffset: 120.h,
-            child: CustomScrollView(
-              cacheExtent: 1500.0,
-              physics: const AlwaysScrollableScrollPhysics(
-                parent: ClampingScrollPhysics(),
-              ),
-              slivers: [
-                // 1. Collapsing Project Header
-                _buildCollapsingHeader(context, isTablet, horizontalPadding),
+          return BlocBuilder<ProjectBloc, ProjectState>(
+            builder: (context, state) {
+              final projects = _filterAndSort(state.projects);
 
-                // 2. Search & Sort Bar
-                SliverToBoxAdapter(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1000),
-                      child: Padding(
-                        padding: EdgeInsets.only(
-                          left: horizontalPadding,
-                          right: horizontalPadding,
-                          top: AppDimensions.space12.h,
-                          bottom: AppDimensions.space12.h,
-                        ),
-                        child: _buildSearchAndSortBar(context),
-                      ),
-                    ),
+              return RefreshIndicator(
+                onRefresh: () async {
+                  context.read<ProjectBloc>().add(const RefreshProjects());
+                },
+                color: colorScheme.primary,
+                edgeOffset: 120.h,
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: ClampingScrollPhysics(),
                   ),
-                ),
+                  slivers: [
+                    // 1. Collapsing Project Header
+                    _buildCollapsingHeader(context, isTablet, horizontalPadding, state.projects.length),
 
-                // 3. Filter Chips Row
-                SliverToBoxAdapter(
-                  child: Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1000),
-                      child: Padding(
-                        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-                        child: _buildFilterTabsRow(context),
-                      ),
-                    ),
-                  ),
-                ),
-
-                // Spacing before Project list
-                SliverToBoxAdapter(
-                  child: SizedBox(height: AppDimensions.space16.h),
-                ),
-
-                // 4. Main Project Content / Loading / Error / Empty States
-                if (_isLoading)
-                  SliverToBoxAdapter(
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1000),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-                          child: _buildSkeletonLoading(context, isTablet),
-                        ),
-                      ),
-                    ),
-                  )
-                else if (_isError)
-                  SliverToBoxAdapter(
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 600),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: horizontalPadding,
-                            vertical: AppDimensions.space40.h,
-                          ),
-                          child: AppErrorView(
-                            title: 'Unable to load projects',
-                            message: 'Something went wrong while loading your projects.',
-                            onRetry: () {
-                              setState(() => _isError = false);
-                            },
-                          ),
-                        ),
-                      ),
-                    ),
-                  )
-                else if (_allProjects.isEmpty)
-                  SliverToBoxAdapter(
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 600),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: horizontalPadding,
-                            vertical: AppDimensions.space40.h,
-                          ),
-                          child: AppEmptyView(
-                            title: 'No projects yet',
-                            description: 'Create your first project and start organizing your work.',
-                            actionText: 'Create Project',
-                            onAction: () => context.go(RouteNames.createProject),
-                          ),
-                        ),
-                      ),
-                    ),
-                  )
-                else
-                  // Project Cards List / Responsive Grid
-                  SliverPadding(
-                    padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-                    sliver: SliverToBoxAdapter(
+                    // 2. Search & Sort Bar
+                    SliverToBoxAdapter(
                       child: Center(
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: 1000),
-                          child: isTablet
-                              ? _buildTabletGrid(context)
-                              : _buildMobileList(context),
+                          child: Padding(
+                            padding: EdgeInsets.only(
+                              left: horizontalPadding,
+                              right: horizontalPadding,
+                              top: AppDimensions.space12.h,
+                              bottom: AppDimensions.space12.h,
+                            ),
+                            child: _buildSearchAndSortBar(context),
+                          ),
                         ),
                       ),
                     ),
-                  ),
 
-                // 5. Scroll clearance so floating bottom nav never obscures items
-                SliverPadding(
-                  padding: EdgeInsets.only(bottom: 108.h),
+                    // 3. Filter Chips Row
+                    SliverToBoxAdapter(
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 1000),
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                            child: _buildFilterTabsRow(context),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Spacing before Project list
+                    SliverToBoxAdapter(
+                      child: SizedBox(height: AppDimensions.space16.h),
+                    ),
+
+                    // 4. Main Project Content / Loading / Error / Empty States
+                    if (state.status == ProjectStatus.loading && state.projects.isEmpty)
+                      SliverToBoxAdapter(
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 1000),
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                              child: _buildSkeletonLoading(context, isTablet),
+                            ),
+                          ),
+                        ),
+                      )
+                    else if (state.status == ProjectStatus.error)
+                      SliverToBoxAdapter(
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 600),
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: horizontalPadding,
+                                vertical: AppDimensions.space40.h,
+                              ),
+                              child: AppErrorView(
+                                title: 'Unable to load projects',
+                                message: state.errorMessage ?? 'Something went wrong.',
+                                onRetry: () {
+                                  context.read<ProjectBloc>().add(const LoadProjects());
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    else if (state.status == ProjectStatus.empty || projects.isEmpty)
+                      SliverToBoxAdapter(
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 600),
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(
+                                horizontal: horizontalPadding,
+                                vertical: AppDimensions.space40.h,
+                              ),
+                              child: AppEmptyView(
+                                title: _hasSearchText || _selectedStatusFilter != 'All' ? 'No projects found' : 'No projects yet',
+                                description: _hasSearchText || _selectedStatusFilter != 'All' 
+                                  ? 'Adjust your filters or try a different search term.'
+                                  : 'Create your first project and start organizing your work.',
+                                actionText: _hasSearchText || _selectedStatusFilter != 'All' ? 'Clear Filters' : 'Create Project',
+                                onAction: () {
+                                  if (_hasSearchText || _selectedStatusFilter != 'All') {
+                                    _clearFilters();
+                                  } else {
+                                    context.push(RouteNames.createProject);
+                                  }
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      // Project Cards List / Responsive Grid
+                      SliverPadding(
+                        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                        sliver: SliverToBoxAdapter(
+                          child: Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 1000),
+                              child: isTablet
+                                  ? _buildTabletGrid(context, projects)
+                                  : _buildMobileList(context, projects),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    // 5. Scroll clearance so floating bottom nav never obscures items
+                    SliverPadding(
+                      padding: EdgeInsets.only(bottom: 108.h),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              );
+            },
           );
         },
       ),
@@ -265,8 +258,10 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   // ==========================================================================
   // 1. Collapsing Project Header
   // ==========================================================================
-  Widget _buildCollapsingHeader(BuildContext context, bool isTablet, double horizontalPadding) {
+  Widget _buildCollapsingHeader(BuildContext context, bool isTablet, double horizontalPadding, int totalCount) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
     final isDark = theme.brightness == Brightness.dark;
 
     final expandedHeight = (isTablet ? 180.0 : 165.0).h.clamp(150.0, 210.0);
@@ -294,7 +289,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  theme.colorScheme.primary.withValues(alpha: isDark ? 0.14 : 0.06),
+                  colorScheme.primary.withValues(alpha: isDark ? 0.14 : 0.06),
                   theme.scaffoldBackgroundColor,
                 ],
               ),
@@ -316,13 +311,13 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                           children: [
                             Text(
                               'Projects',
-                              style: theme.textTheme.titleLarge?.copyWith(
+                              style: textTheme.titleLarge?.copyWith(
                                 fontSize: 18.sp,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                             SizedBox(width: 8.w),
-                            _buildCountBadge(context, '3'),
+                            _buildCountBadge(context, '$totalCount'),
                           ],
                         ),
                       ),
@@ -339,11 +334,11 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                           icon: Icon(
                             Icons.add_rounded,
                             size: AppDimensions.iconMD.r,
-                            color: theme.colorScheme.primary,
+                            color: colorScheme.primary,
                           ),
-                          onPressed: () => context.go(RouteNames.createProject),
+                          onPressed: () => context.push(RouteNames.createProject),
                           style: IconButton.styleFrom(
-                            backgroundColor: theme.colorScheme.primary.withValues(
+                            backgroundColor: colorScheme.primary.withValues(
                               alpha: isDark ? 0.2 : 0.1,
                             ),
                           ),
@@ -365,7 +360,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             // Pill Count Tag
-                            _buildCountBadge(context, '3 active projects'),
+                            _buildCountBadge(context, '$totalCount active projects'),
                             SizedBox(height: 6.h),
 
                             // Main Title Headline
@@ -373,7 +368,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                               'Projects',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.headlineMedium?.copyWith(
+                              style: textTheme.headlineMedium?.copyWith(
                                 fontSize: (isTablet ? 26.0 : 22.0).sp,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: -0.4,
@@ -386,8 +381,8 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                               'Manage your workspaces and keep every project moving forward.',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
                                 fontSize: 12.5.sp,
                                 height: 1.25,
                               ),
@@ -434,6 +429,8 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   // ==========================================================================
   Widget _buildSearchAndSortBar(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
     final isDark = theme.brightness == Brightness.dark;
 
     return Row(
@@ -443,15 +440,15 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
           child: Container(
             height: 44.h,
             decoration: BoxDecoration(
-              color: theme.colorScheme.surface,
+              color: colorScheme.surface,
               borderRadius: BorderRadius.circular(AppDimensions.radiusMD.r),
               border: Border.all(
-                color: theme.colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
+                color: colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
                 width: 1.0,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: theme.colorScheme.shadow.withValues(alpha: isDark ? 0.15 : 0.02),
+                  color: colorScheme.shadow.withValues(alpha: isDark ? 0.15 : 0.02),
                   blurRadius: 6.r,
                   offset: Offset(0, 2.h),
                 ),
@@ -464,19 +461,19 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                 Icon(
                   Icons.search_rounded,
                   size: AppDimensions.iconSM.r,
-                  color: theme.colorScheme.onSurfaceVariant,
+                  color: colorScheme.onSurfaceVariant,
                 ),
                 SizedBox(width: 8.w),
                 Expanded(
                   child: TextField(
                     controller: _searchController,
-                    style: theme.textTheme.bodyMedium?.copyWith(
+                    style: textTheme.bodyMedium?.copyWith(
                       fontSize: 13.5.sp,
                     ),
                     decoration: InputDecoration(
                       hintText: 'Search projects...',
-                      hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                      hintStyle: textTheme.bodyMedium?.copyWith(
+                        color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                         fontSize: 13.sp,
                       ),
                       border: InputBorder.none,
@@ -495,7 +492,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                       child: Icon(
                         Icons.close_rounded,
                         size: 16.r,
-                        color: theme.colorScheme.onSurfaceVariant,
+                        color: colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -507,7 +504,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
 
         // Sort Action Button
         Material(
-          color: theme.colorScheme.surface,
+          color: colorScheme.surface,
           borderRadius: BorderRadius.circular(AppDimensions.radiusMD.r),
           child: InkWell(
             onTap: () => _showSortModal(context),
@@ -518,12 +515,12 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(AppDimensions.radiusMD.r),
                 border: Border.all(
-                  color: theme.colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
+                  color: colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
                   width: 1.0,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: theme.colorScheme.shadow.withValues(alpha: isDark ? 0.15 : 0.02),
+                    color: colorScheme.shadow.withValues(alpha: isDark ? 0.15 : 0.02),
                     blurRadius: 6.r,
                     offset: Offset(0, 2.h),
                   ),
@@ -535,13 +532,13 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                   Icon(
                     _selectedSort.icon,
                     size: 16.r,
-                    color: theme.colorScheme.primary,
+                    color: colorScheme.primary,
                   ),
                   SizedBox(width: 6.w),
                   Text(
                     'Sort',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: theme.colorScheme.onSurface,
+                    style: textTheme.labelMedium?.copyWith(
+                      color: colorScheme.onSurface,
                       fontSize: 12.5.sp,
                       fontWeight: FontWeight.w600,
                     ),
@@ -584,16 +581,16 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   // ==========================================================================
   // 4. Project Card Lists (Mobile Stacked & Tablet Grid)
   // ==========================================================================
-  Widget _buildMobileList(BuildContext context) {
+  Widget _buildMobileList(BuildContext context, List<Project> projects) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: _allProjects
+      children: projects
           .map(
             (project) => Padding(
               padding: EdgeInsets.only(bottom: AppDimensions.space12.h),
               child: _ProjectCardItem(
                 project: project,
-                onTap: () => context.go('/projects/${project.id}'),
+                onTap: () => context.push('/projects/${project.id}'),
               ),
             ),
           )
@@ -601,7 +598,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
     );
   }
 
-  Widget _buildTabletGrid(BuildContext context) {
+  Widget _buildTabletGrid(BuildContext context, List<Project> projects) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final cardWidth = (constraints.maxWidth - 16.w) / 2;
@@ -609,13 +606,13 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
         return Wrap(
           spacing: 16.w,
           runSpacing: 16.h,
-          children: _allProjects
+          children: projects
               .map(
                 (project) => SizedBox(
                   width: cardWidth,
                   child: _ProjectCardItem(
                     project: project,
-                    onTap: () => context.go('/projects/${project.id}'),
+                    onTap: () => context.push('/projects/${project.id}'),
                   ),
                 ),
               )
@@ -786,17 +783,18 @@ class _FilterTabChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
     final bgColor = isSelected
-        ? theme.colorScheme.primary.withValues(alpha: isDark ? 0.2 : 0.1)
-        : theme.colorScheme.surface;
+        ? colorScheme.primary.withValues(alpha: isDark ? 0.2 : 0.1)
+        : colorScheme.surface;
     final borderColor = isSelected
-        ? theme.colorScheme.primary.withValues(alpha: 0.5)
-        : theme.colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6);
+        ? colorScheme.primary.withValues(alpha: 0.5)
+        : colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6);
     final textColor = isSelected
-        ? theme.colorScheme.primary
-        : theme.colorScheme.onSurfaceVariant;
+        ? colorScheme.primary
+        : colorScheme.onSurfaceVariant;
 
     return Material(
       color: bgColor,
@@ -831,18 +829,23 @@ class _ProjectCardItem extends StatelessWidget {
     required this.onTap,
   });
 
-  final _ProjectItemData project;
+  final Project project;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
     final isDark = theme.brightness == Brightness.dark;
-    final effectiveAccent = theme.colorScheme.primary;
-    final percentText = '${(project.progress * 100).toInt()}%';
+    final effectiveAccent = colorScheme.primary;
+    // Mock progress calculation as it's not in entity
+    final progress = project.status.toLowerCase() == 'done' ? 1.0 : 0.6;
+    final percentText = '${(progress * 100).toInt()}%';
+    final initials = project.name.split(' ').take(2).map((e) => e.isNotEmpty ? e[0] : '').join().toUpperCase();
 
     return Material(
-      color: theme.colorScheme.surface,
+      color: colorScheme.surface,
       borderRadius: BorderRadius.circular(AppDimensions.radiusLG.r),
       child: InkWell(
         onTap: onTap,
@@ -852,12 +855,12 @@ class _ProjectCardItem extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppDimensions.radiusLG.r),
             border: Border.all(
-              color: theme.colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
+              color: colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
               width: 1.0,
             ),
             boxShadow: [
               BoxShadow(
-                color: theme.colorScheme.shadow.withValues(alpha: isDark ? 0.15 : 0.02),
+                color: colorScheme.shadow.withValues(alpha: isDark ? 0.15 : 0.02),
                 blurRadius: 8.r,
                 offset: Offset(0, 2.h),
               ),
@@ -883,8 +886,8 @@ class _ProjectCardItem extends StatelessWidget {
                     ),
                     alignment: Alignment.center,
                     child: Text(
-                      project.initials,
-                      style: theme.textTheme.labelMedium?.copyWith(
+                      initials,
+                      style: textTheme.labelMedium?.copyWith(
                         color: effectiveAccent,
                         fontSize: 13.sp,
                         fontWeight: FontWeight.w700,
@@ -898,7 +901,7 @@ class _ProjectCardItem extends StatelessWidget {
                       project.name,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
+                      style: textTheme.titleMedium?.copyWith(
                         fontSize: 15.5.sp,
                         fontWeight: FontWeight.w700,
                       ),
@@ -908,7 +911,7 @@ class _ProjectCardItem extends StatelessWidget {
                   Icon(
                     Icons.chevron_right_rounded,
                     size: 20.r,
-                    color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
+                    color: colorScheme.onSurfaceVariant.withValues(alpha: 0.7),
                   ),
                 ],
               ),
@@ -919,22 +922,22 @@ class _ProjectCardItem extends StatelessWidget {
                 project.description,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+                style: textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
                   fontSize: 12.5.sp,
                   height: 1.35,
                 ),
               ),
               SizedBox(height: AppDimensions.space14.h),
 
-              // Progress Header Row (Status & Percentage)
+              // Progress Header Row (Status \u0026 Percentage)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   StatusBadge(status: project.status, showDot: false),
                   Text(
                     percentText,
-                    style: theme.textTheme.labelSmall?.copyWith(
+                    style: textTheme.labelSmall?.copyWith(
                       color: effectiveAccent,
                       fontSize: 12.sp,
                       fontWeight: FontWeight.w700,
@@ -948,9 +951,9 @@ class _ProjectCardItem extends StatelessWidget {
               ClipRRect(
                 borderRadius: BorderRadius.circular(AppDimensions.radiusFull.r),
                 child: LinearProgressIndicator(
-                  value: project.progress,
+                  value: progress,
                   minHeight: 5.h,
-                  backgroundColor: theme.colorScheme.primaryContainer.withValues(alpha: 0.4),
+                  backgroundColor: colorScheme.primaryContainer.withValues(alpha: 0.4),
                   valueColor: AlwaysStoppedAnimation<Color>(effectiveAccent),
                 ),
               ),
@@ -962,13 +965,13 @@ class _ProjectCardItem extends StatelessWidget {
                   Icon(
                     Icons.checklist_rounded,
                     size: 14.r,
-                    color: theme.colorScheme.onSurfaceVariant,
+                    color: colorScheme.onSurfaceVariant,
                   ),
                   SizedBox(width: 4.w),
                   Text(
-                    project.taskCount,
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                    '${project.taskCount} Tasks',
+                    style: textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
                       fontSize: 11.5.sp,
                       fontWeight: FontWeight.w600,
                     ),

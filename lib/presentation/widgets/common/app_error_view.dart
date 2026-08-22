@@ -23,6 +23,8 @@ class AppErrorView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
 
     return Center(
       child: Padding(
@@ -38,20 +40,20 @@ class AppErrorView extends StatelessWidget {
               width: 64.r,
               height: 64.r,
               decoration: BoxDecoration(
-                color: theme.colorScheme.errorContainer.withValues(alpha: 0.5),
+                color: colorScheme.errorContainer.withValues(alpha: 0.5),
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 icon,
                 size: 32.r,
-                color: theme.colorScheme.error,
+                color: colorScheme.error,
               ),
             ),
             SizedBox(height: AppDimensions.space16.h),
             Text(
               title,
               textAlign: TextAlign.center,
-              style: theme.textTheme.titleMedium?.copyWith(
+              style: textTheme.titleMedium?.copyWith(
                 fontSize: 16.sp,
                 fontWeight: FontWeight.w600,
               ),
@@ -60,8 +62,8 @@ class AppErrorView extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+              style: textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onSurfaceVariant,
                 fontSize: 14.sp,
                 height: 1.4,
               ),

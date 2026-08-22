@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_dimensions.dart';
 import '../../../core/routes/route_names.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../domain/repositories/organization_repository.dart';
+import '../../../core/di/injection.dart';
+import '../../bloc/auth/auth_bloc.dart';
+import '../../bloc/auth/auth_state.dart';
 import '../../widgets/common/app_button.dart';
 import '../../widgets/common/priority_badge.dart';
 import '../../widgets/common/status_badge.dart';
@@ -20,134 +25,170 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   // UI State toggles for interactive previewing
   bool _isLoading = false;
+  String? _orgName;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadOrgName();
+  }
+
+  Future<void> _loadOrgName() async {
+    final state = context.read<AuthBloc>().state;
+    if (state.orgId != null) {
+      final org = await sl<OrganizationRepository>().getOrganizationById(state.orgId!);
+      if (mounted) {
+        setState(() {
+          _orgName = org?.name;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
 
-    return Scaffold(
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isTablet = constraints.maxWidth >= 720;
-          final horizontalPadding = (isTablet ? AppDimensions.space32 : AppDimensions.space20).w;
+    return BlocBuilder<AuthBloc, AuthState>(
+      builder: (context, authState) {
+        final userName = authState.user?.name ?? 'User';
+        final organizationName = _orgName ?? authState.orgId ?? 'Workspace';
+        final avatarUrl = authState.user?.avatarUrl;
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              setState(() => _isLoading = true);
-              await Future.delayed(const Duration(milliseconds: 900));
-              if (mounted) setState(() => _isLoading = false);
-            },
-            color: theme.colorScheme.primary,
-            edgeOffset: 120.h,
-            child: CustomScrollView(
-              cacheExtent: 1500.0,
-              physics: const AlwaysScrollableScrollPhysics(
-                parent: ClampingScrollPhysics(),
-              ),
-              slivers: [
-                // 1. Collapsing Reactive SliverAppBar
-                _buildCollapsingHeader(context, isTablet, horizontalPadding),
+        return Scaffold(
+          body: LayoutBuilder(
+            builder: (context, constraints) {
+              final isTablet = constraints.maxWidth >= 720;
+              final horizontalPadding = (isTablet ? AppDimensions.space32 : AppDimensions.space20).w;
 
-                // 2. Main Content or Skeleton Loading
-                if (_isLoading)
-                  SliverPadding(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: horizontalPadding,
-                      vertical: AppDimensions.space20.h,
-                    ),
-                    sliver: SliverToBoxAdapter(
-                      child: _buildSkeletonLoading(context, isTablet),
-                    ),
-                  )
-                else ...[
-                  // Statistics Overview Grid
-                  SliverToBoxAdapter(
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1000),
-                        child: Padding(
-                          padding: EdgeInsets.only(
-                            left: horizontalPadding,
-                            right: horizontalPadding,
-                            top: AppDimensions.space16.h,
-                            bottom: AppDimensions.space24.h,
+              return RefreshIndicator(
+                onRefresh: () async {
+                  setState(() => _isLoading = true);
+                  await Future.delayed(const Duration(milliseconds: 900));
+                  if (mounted) setState(() => _isLoading = false);
+                },
+                color: colorScheme.primary,
+                edgeOffset: 120.h,
+                child: CustomScrollView(
+                  physics: const AlwaysScrollableScrollPhysics(
+                    parent: ClampingScrollPhysics(),
+                  ),
+                  slivers: [
+                    // 1. Collapsing Reactive SliverAppBar
+                    _buildCollapsingHeader(context, isTablet, horizontalPadding, userName, organizationName, avatarUrl),
+
+                    // 2. Main Content or Skeleton Loading
+                    if (_isLoading)
+                      SliverPadding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: horizontalPadding,
+                          vertical: AppDimensions.space20.h,
+                        ),
+                        sliver: SliverToBoxAdapter(
+                          child: _buildSkeletonLoading(context, isTablet),
+                        ),
+                      )
+                    else ...[
+                      // Statistics Overview Grid
+                      SliverToBoxAdapter(
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 1000),
+                            child: Padding(
+                              padding: EdgeInsets.only(
+                                left: horizontalPadding,
+                                right: horizontalPadding,
+                                top: AppDimensions.space16.h,
+                                bottom: AppDimensions.space24.h,
+                              ),
+                              child: _buildStatisticsGrid(context),
+                            ),
                           ),
-                          child: _buildStatisticsGrid(context),
                         ),
                       ),
-                    ),
-                  ),
 
-                  // Quick Actions Bar
-                  SliverToBoxAdapter(
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1000),
-                        child: Padding(
-                          padding: EdgeInsets.only(
-                            left: horizontalPadding,
-                            right: horizontalPadding,
-                            bottom: AppDimensions.space28.h,
+                      // Quick Actions Bar
+                      SliverToBoxAdapter(
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 1000),
+                            child: Padding(
+                              padding: EdgeInsets.only(
+                                left: horizontalPadding,
+                                right: horizontalPadding,
+                                bottom: AppDimensions.space28.h,
+                              ),
+                              child: _buildQuickActions(context),
+                            ),
                           ),
-                          child: _buildQuickActions(context),
                         ),
                       ),
-                    ),
-                  ),
 
-                  // Main Content: Projects & Tasks
-                  SliverToBoxAdapter(
-                    child: Center(
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 1000),
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-                          child: isTablet
-                              ? Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      flex: 5,
-                                      child: _buildProjectsSection(context),
+                      // Main Content: Projects & Tasks
+                      SliverToBoxAdapter(
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 1000),
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                              child: isTablet
+                                  ? Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          flex: 5,
+                                          child: _buildProjectsSection(context),
+                                        ),
+                                        SizedBox(width: AppDimensions.space24.w),
+                                        Expanded(
+                                          flex: 6,
+                                          child: _buildRecentTasksSection(context),
+                                        ),
+                                      ],
+                                    )
+                                  : Column(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        _buildProjectsSection(context),
+                                        SizedBox(height: AppDimensions.space28.h),
+                                        _buildRecentTasksSection(context),
+                                      ],
                                     ),
-                                    SizedBox(width: AppDimensions.space24.w),
-                                    Expanded(
-                                      flex: 6,
-                                      child: _buildRecentTasksSection(context),
-                                    ),
-                                  ],
-                                )
-                              : Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                  children: [
-                                    _buildProjectsSection(context),
-                                    SizedBox(height: AppDimensions.space28.h),
-                                    _buildRecentTasksSection(context),
-                                  ],
-                                ),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                  ),
-                ],
+                    ],
 
-                // 3. Scroll clearance so the floating bottom nav never obscures content
-                SliverPadding(
-                  padding: EdgeInsets.only(bottom: 108.h),
+                    // 3. Scroll clearance so the floating bottom nav never obscures content
+                    SliverPadding(
+                      padding: EdgeInsets.only(bottom: 108.h),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          );
-        },
-      ),
+              );
+            },
+          ),
+        );
+      },
     );
   }
 
   // ==========================================================================
   // 1. Collapsing Dashboard Header
   // ==========================================================================
-  Widget _buildCollapsingHeader(BuildContext context, bool isTablet, double horizontalPadding) {
+  Widget _buildCollapsingHeader(
+    BuildContext context, 
+    bool isTablet, 
+    double horizontalPadding,
+    String userName,
+    String orgName,
+    String? avatarUrl,
+  ) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
     final isDark = theme.brightness == Brightness.dark;
 
     final expandedHeight = (isTablet ? 220.0 : 200.0).h.clamp(180.0, 240.0);
@@ -175,7 +216,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
                 colors: [
-                  theme.colorScheme.primary.withValues(alpha: isDark ? 0.14 : 0.06),
+                  colorScheme.primary.withValues(alpha: isDark ? 0.14 : 0.06),
                   theme.scaffoldBackgroundColor,
                 ],
               ),
@@ -198,10 +239,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             Container(
                               padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
                               decoration: BoxDecoration(
-                                color: theme.colorScheme.surface,
+                                color: colorScheme.surface,
                                 borderRadius: BorderRadius.circular(AppDimensions.radiusSM.r),
                                 border: Border.all(
-                                  color: theme.colorScheme.outline.withValues(alpha: isDark ? 0.4 : 0.6),
+                                  color: colorScheme.outline.withValues(alpha: isDark ? 0.4 : 0.6),
                                 ),
                               ),
                               child: Row(
@@ -210,12 +251,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   Icon(
                                     Icons.business_rounded,
                                     size: 13.r,
-                                    color: theme.colorScheme.secondary,
+                                    color: colorScheme.secondary,
                                   ),
                                   SizedBox(width: 4.w),
                                   Text(
-                                    'Nimbus Digital',
-                                    style: theme.textTheme.labelSmall?.copyWith(
+                                    orgName,
+                                    style: textTheme.labelSmall?.copyWith(
                                       fontSize: 11.sp,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -248,8 +289,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   SnackBar(
                                     content: Text(
                                       'Notifications will be integrated in future milestone.',
-                                      style: theme.textTheme.bodyMedium?.copyWith(
-                                        color: theme.colorScheme.onPrimary,
+                                      style: textTheme.bodyMedium?.copyWith(
+                                        color: colorScheme.onPrimary,
                                       ),
                                     ),
                                   ),
@@ -264,7 +305,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 width: 7.r,
                                 height: 7.r,
                                 decoration: BoxDecoration(
-                                  color: theme.colorScheme.error,
+                                  color: colorScheme.error,
                                   shape: BoxShape.circle,
                                 ),
                               ),
@@ -274,9 +315,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         SizedBox(width: 4.w),
                         GestureDetector(
                           onTap: () => context.go(RouteNames.profile),
-                          child: const UserAvatar(
-                            name: 'Ava Davis',
-                            initials: 'AD',
+                          child: UserAvatar(
+                            name: userName,
+                            imageUrl: avatarUrl,
                             size: 38.0,
                           ),
                         ),
@@ -300,10 +341,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             Container(
                               padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 4.h),
                               decoration: BoxDecoration(
-                                color: theme.colorScheme.surface,
+                                color: colorScheme.surface,
                                 borderRadius: BorderRadius.circular(AppDimensions.radiusSM.r),
                                 border: Border.all(
-                                  color: theme.colorScheme.outline.withValues(alpha: isDark ? 0.4 : 0.6),
+                                  color: colorScheme.outline.withValues(alpha: isDark ? 0.4 : 0.6),
                                 ),
                               ),
                               child: Row(
@@ -312,12 +353,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   Icon(
                                     Icons.business_rounded,
                                     size: 13.r,
-                                    color: theme.colorScheme.secondary,
+                                    color: colorScheme.secondary,
                                   ),
                                   SizedBox(width: 4.w),
                                   Text(
-                                    'Nimbus Digital',
-                                    style: theme.textTheme.labelSmall?.copyWith(
+                                    orgName,
+                                    style: textTheme.labelSmall?.copyWith(
                                       fontSize: 11.sp,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -329,10 +370,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                             // Main Greeting Headline
                             Text(
-                              'Good morning, Ava',
+                              'Good morning, ${userName.split(' ').first}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.headlineMedium?.copyWith(
+                              style: textTheme.headlineMedium?.copyWith(
                                 fontSize: (isTablet ? 24.0 : 20.0).sp,
                                 fontWeight: FontWeight.w700,
                                 letterSpacing: -0.4,
@@ -345,8 +386,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               "Here's what's happening with your workspace today.",
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.onSurfaceVariant,
+                              style: textTheme.bodyMedium?.copyWith(
+                                color: colorScheme.onSurfaceVariant,
                                 fontSize: 12.5.sp,
                                 height: 1.25,
                               ),
@@ -369,6 +410,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // ==========================================================================
   Widget _buildStatisticsGrid(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
     final stats = [
@@ -377,16 +419,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         value: '3',
         subtext: '+1 this month',
         icon: Icons.folder_outlined,
-        accentColor: theme.colorScheme.primary,
-        bgColor: theme.colorScheme.primary.withValues(alpha: isDark ? 0.16 : 0.09),
+        accentColor: colorScheme.primary,
+        bgColor: colorScheme.primary.withValues(alpha: isDark ? 0.16 : 0.09),
       ),
       _StatItemData(
         label: 'Total Tasks',
         value: '15',
         subtext: '+3 this week',
         icon: Icons.checklist_rounded,
-        accentColor: theme.colorScheme.secondary,
-        bgColor: theme.colorScheme.secondary.withValues(alpha: isDark ? 0.16 : 0.09),
+        accentColor: colorScheme.secondary,
+        bgColor: colorScheme.secondary.withValues(alpha: isDark ? 0.16 : 0.09),
       ),
       _StatItemData(
         label: 'Due Soon',
@@ -462,6 +504,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // ==========================================================================
   Widget _buildProjectsSection(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -475,7 +519,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 'Your Projects',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleLarge?.copyWith(
+                style: textTheme.titleLarge?.copyWith(
                   fontSize: 17.sp,
                   fontWeight: FontWeight.w700,
                   letterSpacing: -0.2,
@@ -494,8 +538,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   Text(
                     'View all',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: theme.colorScheme.primary,
+                    style: textTheme.labelMedium?.copyWith(
+                      color: colorScheme.primary,
                       fontSize: 13.sp,
                       fontWeight: FontWeight.w600,
                     ),
@@ -504,7 +548,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Icon(
                     Icons.arrow_forward_rounded,
                     size: 14.r,
-                    color: theme.colorScheme.primary,
+                    color: colorScheme.primary,
                   ),
                 ],
               ),
@@ -521,8 +565,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           status: 'Active',
           progress: 0.80,
           leadingIcon: Icons.language_rounded,
-          accentColor: theme.colorScheme.primary,
-          onTap: () => context.go('/projects/proj-1'),
+          accentColor: colorScheme.primary,
+          onTap: () => context.go('/projects/proj_1001'),
         ),
         SizedBox(height: AppDimensions.space12.h),
 
@@ -534,8 +578,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           status: 'Active',
           progress: 0.45,
           leadingIcon: Icons.smartphone_rounded,
-          accentColor: theme.colorScheme.secondary,
-          onTap: () => context.go('/projects/proj-2'),
+          accentColor: colorScheme.secondary,
+          onTap: () => context.go('/projects/proj_1002'),
         ),
       ],
     );
@@ -546,46 +590,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // ==========================================================================
   Widget _buildRecentTasksSection(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
 
     final recentTasks = [
       const _TaskItemData(
-        id: 'task-1',
+        id: 'task_2004',
         title: 'Fix broken contact form',
         projectName: 'Website Relaunch',
         status: 'Todo',
         priority: 'Urgent',
-        assigneeName: 'Ava Davis',
-        assigneeInitials: 'AD',
+        assigneeName: 'Marcus Lee',
+        assigneeInitials: 'ML',
         dueDate: 'Due Jan 08',
       ),
       const _TaskItemData(
-        id: 'task-2',
+        id: 'task_2001',
         title: 'Set up design tokens in Figma',
+        projectName: 'Website Relaunch',
+        status: 'Done',
+        priority: 'Medium',
+        assigneeName: 'Marcus Lee',
+        assigneeInitials: 'ML',
+        dueDate: 'Due Jan 05',
+      ),
+      const _TaskItemData(
+        id: 'task_2002',
+        title: 'Build responsive nav component',
         projectName: 'Website Relaunch',
         status: 'In Progress',
         priority: 'High',
-        assigneeName: 'Sarah Connor',
-        assigneeInitials: 'SC',
-        dueDate: 'Due Jan 10',
+        assigneeName: 'Priya Nair',
+        assigneeInitials: 'PN',
+        dueDate: 'Due Jan 20',
       ),
       const _TaskItemData(
-        id: 'task-3',
-        title: 'Build responsive nav component',
-        projectName: 'Mobile App v2',
-        status: 'Todo',
-        priority: 'Medium',
-        assigneeName: 'Ava Davis',
-        assigneeInitials: 'AD',
-        dueDate: 'Due Jan 12',
-      ),
-      const _TaskItemData(
-        id: 'task-4',
+        id: 'task_2003',
         title: 'Write homepage copy',
         projectName: 'Website Relaunch',
         status: 'Review',
-        priority: 'Low',
-        assigneeName: 'Elena Rostova',
-        assigneeInitials: 'ER',
+        priority: 'Medium',
+        assigneeName: 'Ava Thompson',
+        assigneeInitials: 'AT',
         dueDate: 'Due Jan 15',
       ),
     ];
@@ -602,7 +648,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 'Recent Tasks',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.titleLarge?.copyWith(
+                style: textTheme.titleLarge?.copyWith(
                   fontSize: 17.sp,
                   fontWeight: FontWeight.w700,
                   letterSpacing: -0.2,
@@ -621,8 +667,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   Text(
                     'View all',
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: theme.colorScheme.primary,
+                    style: textTheme.labelMedium?.copyWith(
+                      color: colorScheme.primary,
                       fontSize: 13.sp,
                       fontWeight: FontWeight.w600,
                     ),
@@ -631,7 +677,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Icon(
                     Icons.arrow_forward_rounded,
                     size: 14.r,
-                    color: theme.colorScheme.primary,
+                    color: colorScheme.primary,
                   ),
                 ],
               ),
@@ -761,6 +807,7 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
     return Container(
@@ -769,15 +816,15 @@ class _StatCard extends StatelessWidget {
         vertical: AppDimensions.space14.h,
       ),
       decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(AppDimensions.radiusLG.r),
         border: Border.all(
-          color: theme.colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
+          color: colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
           width: 1.0,
         ),
         boxShadow: [
           BoxShadow(
-            color: theme.colorScheme.shadow.withValues(alpha: isDark ? 0.2 : 0.02),
+            color: colorScheme.shadow.withValues(alpha: isDark ? 0.2 : 0.02),
             blurRadius: 10.r,
             offset: Offset(0, 3.h),
           ),
@@ -829,7 +876,7 @@ class _StatCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: theme.textTheme.labelMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+              color: colorScheme.onSurfaceVariant,
               fontSize: 12.sp,
               fontWeight: FontWeight.w600,
             ),
@@ -877,12 +924,13 @@ class _ProjectCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
     final percentText = '${(progress * 100).toInt()}%';
-    final effectiveAccent = accentColor ?? theme.colorScheme.primary;
+    final effectiveAccent = accentColor ?? colorScheme.primary;
 
     return Material(
-      color: theme.colorScheme.surface,
+      color: colorScheme.surface,
       borderRadius: BorderRadius.circular(AppDimensions.radiusLG.r),
       child: InkWell(
         onTap: onTap,
@@ -892,12 +940,12 @@ class _ProjectCard extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppDimensions.radiusLG.r),
             border: Border.all(
-              color: theme.colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
+              color: colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
               width: 1.0,
             ),
             boxShadow: [
               BoxShadow(
-                color: theme.colorScheme.shadow.withValues(alpha: isDark ? 0.15 : 0.02),
+                color: colorScheme.shadow.withValues(alpha: isDark ? 0.15 : 0.02),
                 blurRadius: 8.r,
                 offset: Offset(0, 2.h),
               ),
@@ -941,7 +989,7 @@ class _ProjectCard extends StatelessWidget {
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+                            color: colorScheme.onSurfaceVariant,
                             fontSize: 12.sp,
                             height: 1.35,
                           ),
@@ -965,7 +1013,7 @@ class _ProjectCard extends StatelessWidget {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: theme.textTheme.labelSmall?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
+                        color: colorScheme.onSurfaceVariant,
                         fontSize: 11.5.sp,
                         fontWeight: FontWeight.w600,
                       ),
@@ -991,7 +1039,7 @@ class _ProjectCard extends StatelessWidget {
                 child: LinearProgressIndicator(
                   value: progress,
                   minHeight: 5.h,
-                  backgroundColor: theme.colorScheme.primaryContainer.withValues(alpha: 0.4),
+                  backgroundColor: colorScheme.primaryContainer.withValues(alpha: 0.4),
                   valueColor: AlwaysStoppedAnimation<Color>(effectiveAccent),
                 ),
               ),
@@ -1037,10 +1085,12 @@ class _RecentTaskItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
     final isDark = theme.brightness == Brightness.dark;
 
     return Material(
-      color: theme.colorScheme.surface,
+      color: colorScheme.surface,
       borderRadius: BorderRadius.circular(AppDimensions.radiusMD.r),
       child: InkWell(
         onTap: onTap,
@@ -1053,7 +1103,7 @@ class _RecentTaskItem extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(AppDimensions.radiusMD.r),
             border: Border.all(
-              color: theme.colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
+              color: colorScheme.outline.withValues(alpha: isDark ? 0.35 : 0.6),
               width: 1.0,
             ),
           ),
@@ -1069,7 +1119,7 @@ class _RecentTaskItem extends StatelessWidget {
                       data.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodyMedium?.copyWith(
+                      style: textTheme.bodyMedium?.copyWith(
                         fontSize: 13.5.sp,
                         fontWeight: FontWeight.w600,
                       ),
@@ -1098,14 +1148,14 @@ class _RecentTaskItem extends StatelessWidget {
                             child: Icon(
                               Icons.folder_outlined,
                               size: 13.r,
-                              color: theme.colorScheme.onSurfaceVariant,
+                              color: colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ),
                         TextSpan(
                           text: data.projectName,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
+                          style: textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
                             fontSize: 11.sp,
                           ),
                         ),
@@ -1119,8 +1169,8 @@ class _RecentTaskItem extends StatelessWidget {
                   // Due Date
                   Text(
                     data.dueDate,
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
                       fontSize: 11.sp,
                     ),
                   ),

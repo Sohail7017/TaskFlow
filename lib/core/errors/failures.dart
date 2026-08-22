@@ -1,14 +1,9 @@
-import 'package:equatable/equatable.dart';
-
 /// Base Failure class used across domain and presentation layers
-abstract class Failure extends Equatable {
+abstract class Failure {
   const Failure({required this.message, this.code});
 
   final String message;
   final String? code;
-
-  @override
-  List<Object?> get props => [message, code];
 }
 
 /// Server or API failure representation

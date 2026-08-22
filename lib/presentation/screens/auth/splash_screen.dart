@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_dimensions.dart';
 import '../../../core/routes/route_names.dart';
+import '../../bloc/auth/auth_bloc.dart';
+import '../../bloc/auth/auth_state.dart';
 import '../../widgets/common/app_logo.dart';
 
-/// Premium animated splash screen for TaskFlow
+/// Premium animated splash screen for TaskFlow with robust auth state resolution
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -19,7 +22,9 @@ class _SplashScreenState extends State<SplashScreen>
   late final AnimationController _animationController;
   late final Animation<double> _fadeAnimation;
   late final Animation<double> _scaleAnimation;
-  Timer? _navigationTimer;
+  Timer? _minDisplayTimer;
+  bool _minDisplayElapsed = false;
+  bool _hasNavigated = false;
 
   @override
   void initState() {
@@ -43,17 +48,30 @@ class _SplashScreenState extends State<SplashScreen>
 
     _animationController.forward();
 
-    // UI-only navigation delay for visual preview
-    _navigationTimer = Timer(const Duration(milliseconds: 2400), () {
+    // Minimum display duration to allow brand entrance animation to complete smoothly
+    _minDisplayTimer = Timer(const Duration(milliseconds: 1500), () {
       if (mounted) {
-        context.go(RouteNames.login);
+        _minDisplayElapsed = true;
+        _checkAndNavigate(context.read<AuthBloc>().state);
       }
     });
   }
 
+  void _checkAndNavigate(AuthState state) {
+    if (_hasNavigated || !mounted || !_minDisplayElapsed) return;
+
+    if (state.status == AuthStatus.success) {
+      _hasNavigated = true;
+      context.go(RouteNames.dashboard);
+    } else if (state.status != AuthStatus.loading && state.status != AuthStatus.initial) {
+      _hasNavigated = true;
+      context.go(RouteNames.login);
+    }
+  }
+
   @override
   void dispose() {
-    _navigationTimer?.cancel();
+    _minDisplayTimer?.cancel();
     _animationController.dispose();
     super.dispose();
   }
@@ -61,62 +79,69 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
 
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: FadeTransition(
-            opacity: _fadeAnimation,
-            child: ScaleTransition(
-              scale: _scaleAnimation,
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: AppDimensions.space32.w),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Spacer(flex: 3),
-                    // Brand Logo
-                    const AppLogo(size: 80.0),
-                    SizedBox(height: AppDimensions.space24.h),
+    return BlocListener<AuthBloc, AuthState>(
+      listener: (context, state) {
+        _checkAndNavigate(state);
+      },
+      child: Scaffold(
+        body: SafeArea(
+          child: Center(
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: ScaleTransition(
+                scale: _scaleAnimation,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: AppDimensions.space32.w),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Spacer(flex: 3),
+                      // Brand Logo
+                      const AppLogo(size: 80.0),
+                      SizedBox(height: AppDimensions.space24.h),
 
-                    // App Name
-                    Text(
-                      'TaskFlow',
-                      style: theme.textTheme.displayMedium?.copyWith(
-                        fontSize: 32.sp,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    SizedBox(height: AppDimensions.space8.h),
-
-                    // Tagline
-                    Text(
-                      'Organize. Focus. Deliver.',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                        fontSize: 14.sp,
-                        fontWeight: FontWeight.w400,
-                        letterSpacing: 0.3,
-                      ),
-                    ),
-                    const Spacer(flex: 2),
-
-                    // Subtle indicator
-                    SizedBox(
-                      width: 24.r,
-                      height: 24.r,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          theme.colorScheme.primary,
+                      // App Name
+                      Text(
+                        'TaskFlow',
+                        style: textTheme.displayMedium?.copyWith(
+                          fontSize: 32.sp,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.5,
                         ),
                       ),
-                    ),
-                    SizedBox(height: AppDimensions.space32.h),
-                    const Spacer(flex: 1),
-                  ],
+                      SizedBox(height: AppDimensions.space8.h),
+
+                      // Tagline
+                      Text(
+                        'Organize. Focus. Deliver.',
+                        textAlign: TextAlign.center,
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontSize: 14.sp,
+                          fontWeight: FontWeight.w400,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                      const Spacer(flex: 2),
+
+                      // Subtle indicator
+                      SizedBox(
+                        width: 24.r,
+                        height: 24.r,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                      SizedBox(height: AppDimensions.space32.h),
+                      const Spacer(flex: 1),
+                    ],
+                  ),
                 ),
               ),
             ),

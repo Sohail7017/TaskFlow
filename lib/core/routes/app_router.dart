@@ -14,14 +14,25 @@ import '../../presentation/screens/tasks/tasks_screen.dart';
 import '../../presentation/shell/main_shell.dart';
 import 'route_names.dart';
 
-/// Centralized GoRouter routing configuration
+/// Centralized GoRouter routing configuration.
+/// Strictly defines routes and navigation structure without business logic or auth checks.
 abstract final class AppRouter {
   // Global Navigator Key
-  static final GlobalKey<NavigatorState> rootNavigatorKey =
+  static GlobalKey<NavigatorState> rootNavigatorKey =
       GlobalKey<NavigatorState>(debugLabel: 'root_navigator');
 
+  static GoRouter _router = _createRouter();
+
   /// Centralized GoRouter instance
-  static final GoRouter router = GoRouter(
+  static GoRouter get router => _router;
+
+  /// Reset router instance and navigation stack for testing
+  static void reset() {
+    rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root_navigator');
+    _router = _createRouter();
+  }
+
+  static GoRouter _createRouter() => GoRouter(
     navigatorKey: rootNavigatorKey,
     initialLocation: RouteNames.splash,
     debugLogDiagnostics: false,
@@ -83,6 +94,16 @@ abstract final class AppRouter {
                     builder: (context, state) => ProjectDetailsScreen(
                       projectId: state.pathParameters['projectId'] ?? '',
                     ),
+                    routes: <RouteBase>[
+                      GoRoute(
+                        path: 'edit',
+                        name: 'editProject',
+                        parentNavigatorKey: rootNavigatorKey,
+                        builder: (context, state) => AddProjectScreen(
+                          projectId: state.pathParameters['projectId'],
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
